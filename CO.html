@@ -179,24 +179,22 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
   table.co th,table.co td{padding:4px 6px;font-size:11.5px;}
   .tabbar.lvl1{top:58px;}
 }
-/* Sur tablette (iPad portrait/paysage inclus), les tableaux tiennent dans la largeur de l'écran
-   sans défilement horizontal : largeur fixe, texte compact autorisé à passer à la ligne. */
+/* Sur tablette, les colonnes gardent leur largeur naturelle (adaptée au contenu) mais tout est
+   resserré au maximum pour limiter le défilement horizontal ; le défilement reste possible en secours. */
 @media (max-width:1400px){
-  .table-wrap{overflow-x:visible;}
-  table.co{table-layout:fixed;width:100%;}
-  table.co th,table.co td{white-space:normal;word-break:break-word;padding:3px 4px;font-size:10.5px;line-height:1.2;}
-  .cell-btn{min-width:0;padding:3px 4px;font-size:10px;}
-  .sens-btn{font-size:16px;min-width:0;padding:3px 5px;}
-  .student-chip{padding:5px 8px;font-size:10px;}
-  .chip{font-size:10px;padding:2px 6px;}
-  .note-input{width:34px;padding:2px;font-size:10.5px;}
-  input.inline-text{font-size:10.5px;padding:3px 4px;width:95%;}
-  .comport-btn{padding:3px 5px;font-size:9.5px;}
-  .groupe-card, .img-card{width:100%;}
+  table.co th,table.co td{padding:3px 5px;font-size:10.5px;}
+  .cell-btn{min-width:0;padding:3px 5px;font-size:10px;}
+  .sens-btn{font-size:18px;min-width:0;padding:3px 6px;}
+  .student-chip{padding:5px 9px;font-size:10px;}
+  .chip{font-size:10px;padding:2px 7px;}
+  .note-input{width:36px;padding:2px;font-size:10.5px;}
+  input.inline-text{font-size:10.5px;padding:3px 5px;}
+  .comport-btn{padding:3px 6px;font-size:9.5px;}
+  .btn-xs{padding:1px 5px;font-size:9.5px;}
 }
 @media (max-width:1400px) and (orientation:portrait){
-  table.co th,table.co td{padding:2px 3px;font-size:9.5px;}
-  .cell-btn{font-size:9px;padding:2px 3px;}
+  table.co th,table.co td{padding:2px 4px;font-size:9.5px;}
+  .cell-btn{font-size:9px;padding:2px 4px;}
 }
 </style>
 </head>
@@ -1134,9 +1132,9 @@ function groupeCellHtml(cls, num, situ, g, gi){
   const clickAttr = pending ? `data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}"` : "";
   return `<div ${clickAttr} style="${pending?"cursor:pointer;":""}display:flex;align-items:center;gap:4px;">
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
-    <div>${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
+    <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;">${escHtml(studentShortName(s))}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;">${escHtml(studentShortName(s))}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
