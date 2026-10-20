@@ -324,11 +324,16 @@ function ensureSeance(cls, num){
   if(!c.seances) c.seances = {};
   const key = "s"+num;
   if(!c.seances[key]) c.seances[key] = {
-    date:"", groupes:[],
+    date:"", groupes:[], presence:{},
     suivi:{rows:{}}, etoile:{rows:{}}, papillon:{rows:{}}, scores:{rows:{}},
     bareme:{images:[]}
   };
+  if(!c.seances[key].presence) c.seances[key].presence = {};
   return c.seances[key];
+}
+function isPresent(se, studentId){
+  const p = se.presence && se.presence[studentId];
+  return !(p && (p.absent || p.dispense));
 }
 function studentById(cls, id){
   const c = state.classes[cls]; if(!c) return null;
@@ -454,7 +459,7 @@ function applyAutoImportRows(headerCells, rows){
     if(!CLASSES_COLLEGE.includes(key)) return;
     const c = ensureClass(key);
     const dup = c.students.find(s=>normalize(s.nom)===normalize(nom) && normalize(s.prenom)===normalize(prenom));
-    if(!dup){ c.students.push({id:uid(), nom, prenom, absent:false, dispense:false}); counts[key]=(counts[key]||0)+1; }
+    if(!dup){ c.students.push({id:uid(), nom, prenom}); counts[key]=(counts[key]||0)+1; }
   });
   return counts;
 }
@@ -531,18 +536,37 @@ function renderClassPanel(cls){
 
 function renderRosterBody(cls){
   const c = state.classes[cls];
-  const rowsHtml = c.students.map((s,i)=>`
+  const rowsHtml = c.students.map((s)=>`
     <tr>
       <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
       <td class="left">${escHtml(s.prenom)}</td>
-      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.students.${i}.absent" ${s.absent?"checked":""} data-bool="1"></td>
-      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.students.${i}.dispense" ${s.dispense?"checked":""} data-bool="1"></td>
     </tr>`).join("");
   return `
-    <h2 class="ptitle">👥 Liste des élèves — absences / dispenses</h2>
+    <h2 class="ptitle">👥 Liste des élèves de la classe</h2>
+    <p class="hint">Les absences et dispenses se renseignent séance par séance, directement dans chaque onglet Séance.</p>
+    <div class="table-wrap"><table class="co">
+      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th></tr></thead>
+      <tbody>${rowsHtml || "<tr><td colspan=2 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+    </table></div>
+  `;
+}
+
+function renderPresence(cls, num){
+  const se = ensureSeance(cls, num);
+  const c = state.classes[cls];
+  const rows = c.students.map((s)=>{
+    const p = se.presence[s.id] || {absent:false, dispense:false};
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
+      <td class="left">${escHtml(s.prenom)}</td>
+      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.seances.s${num}.presence.${s.id}.absent" ${p.absent?"checked":""} data-bool="1"></td>
+      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.seances.s${num}.presence.${s.id}.dispense" ${p.dispense?"checked":""} data-bool="1"></td>
+    </tr>`;
+  }).join("");
+  return `
     <div class="table-wrap"><table class="co">
       <thead><tr><th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th><th class="col-c6">Absent</th><th class="col-c5">Dispensé</th></tr></thead>
-      <tbody>${rowsHtml || "<tr><td colspan=4 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+      <tbody>${rows || "<tr><td colspan=4 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
     </table></div>
   `;
 }
@@ -564,7 +588,13 @@ function renderSeancePanel(cls, num){
       <div class="field"><label>Date de la séance</label>
         <input type="date" data-path="classes.${escAttr(cls)}.seances.s${num}.date" value="${escAttr(se.date)}">
       </div>
-      <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}">🔄 Constituer les binômes (présents)</button>
+    </div>
+    <h2 class="ptitle">👥 Présence — Séance ${num}</h2>
+    ${renderPresence(cls, num)}
+    <h2 class="ptitle" style="margin-top:16px;">🤝 Groupes / binômes</h2>
+    <div class="row">
+      <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}">🎲 Binômes au hasard (présents)</button>
+      <button class="btn-teal" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">✋ Composer un groupe moi-même</button>
       <span class="hint">${se.groupes.length} groupe(s) constitué(s).</span>
     </div>
     ${renderGroupes(cls, num)}
@@ -589,7 +619,7 @@ function renderGroupes(cls, num){
   const se = ensureSeance(cls,num);
   const c = state.classes[cls];
   const assigned = new Set(se.groupes.flatMap(g=>g.memberIds));
-  const unassigned = c.students.filter(s=>!s.absent && !s.dispense && !assigned.has(s.id));
+  const unassigned = c.students.filter(s=>isPresent(se,s.id) && !assigned.has(s.id));
   const cards = se.groupes.map((g,gi)=>`
     <div class="groupe-card">
       <div class="gtitle">Groupe ${gi+1}</div>
@@ -607,9 +637,9 @@ function renderGroupes(cls, num){
     </div>
   `).join("");
   return `
-    ${cards || "<div class=\"empty\">Aucun groupe — cliquez sur « Constituer les binômes ».</div>"}
+    ${cards || "<div class=\"empty\">Aucun groupe — utilisez « Binômes au hasard » ou « Composer un groupe moi-même » ci-dessus.</div>"}
     <div class="row" style="margin-top:6px;">
-      <button class="btn-small" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">+ nouveau groupe vide</button>
+      <button class="btn-small" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">+ ajouter un autre groupe vide</button>
       ${unassigned.length? `<span class="hint">Non assignés : ${unassigned.map(s=>escHtml(s.prenom||s.nom)).join(", ")}</span>`:""}
     </div>
   `;
@@ -814,7 +844,7 @@ app.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     const hasData = Object.keys(se.suivi.rows).length || Object.keys(se.etoile.rows).length || Object.keys(se.papillon.rows).length || Object.keys(se.scores.rows).length;
     if(hasData && !confirm("Regénérer les binômes va réinitialiser le suivi déjà saisi pour cette séance. Continuer ?")) return;
-    const roster = state.classes[cls].students.filter(s=>!s.absent && !s.dispense);
+    const roster = state.classes[cls].students.filter(s=>isPresent(se,s.id));
     const arr = shuffleArray([...roster]);
     const n = arr.length, groupsCount = Math.floor(n/2);
     const groupes = [];
