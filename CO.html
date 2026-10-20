@@ -155,6 +155,8 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 .sync-status.ok{background:#1f9d5533;color:#eafaf0;}
 .sync-status.error{background:#d3332c55;color:#fff;}
 .sync-status.loading{background:#0006;color:#fff;}
+.floating-clock{position:fixed;bottom:18px;right:18px;background:#0f1b2df0;color:#00c2a8;font-weight:800;font-variant-numeric:tabular-nums;font-family:"Segoe UI",monospace;padding:10px 20px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.45);z-index:500;font-size:30px;border:1px solid #00c2a855;letter-spacing:.5px;user-select:none;}
+@media (max-width:700px){ .floating-clock{font-size:20px;padding:7px 13px;bottom:10px;right:10px;border-radius:10px;} }
 
 @media (max-width:900px){
   body{font-size:13px;}
@@ -184,6 +186,8 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 </header>
 
 <main id="app"></main>
+
+<div id="floatingClock" class="floating-clock">--:--:--</div>
 
 <div id="lightbox" class="lightbox" style="display:none;" data-action="close-lightbox">
   <button class="lb-close" data-action="close-lightbox">✕</button>
@@ -404,7 +408,10 @@ function githubPushRemote(cfg, payload, sha){
   });
 }
 
+let lastSyncErrorMsg = null;
 function updateSyncStatusUI(status, timestamp, errMsg){
+  if(status==="ok") lastSyncErrorMsg = null;
+  if(status==="error") lastSyncErrorMsg = errMsg || "raison inconnue";
   const el = document.getElementById("syncStatus");
   if(!el) return;
   if(status==="off"){ el.style.display="none"; return; }
@@ -1358,7 +1365,7 @@ document.addEventListener("click", function(e){
     document.getElementById("syncOwner").value = cfg.owner || "";
     document.getElementById("syncRepo").value = cfg.repo || "";
     document.getElementById("syncBranch").value = cfg.branch || "main";
-    document.getElementById("syncModalStatus").textContent = cfg.token ? "Synchronisation active sur cet appareil." : "Synchronisation non configurée sur cet appareil.";
+    document.getElementById("syncModalStatus").textContent = lastSyncErrorMsg ? "Erreur : "+lastSyncErrorMsg : (cfg.token ? "Synchronisation active sur cet appareil." : "Synchronisation non configurée sur cet appareil.");
     document.getElementById("syncModal").style.display = "flex";
     return;
   }
@@ -1511,8 +1518,11 @@ document.addEventListener("change", function(e){
 
 /* ===================== HORLOGE ===================== */
 setInterval(()=>{
+  const now = new Date().toLocaleTimeString("fr-FR");
   const el = document.getElementById("liveClock");
-  if(el) el.textContent = new Date().toLocaleTimeString("fr-FR");
+  if(el) el.textContent = now;
+  const el2 = document.getElementById("floatingClock");
+  if(el2) el2.textContent = now;
 }, 1000);
 
 /* ===================== INIT ===================== */
