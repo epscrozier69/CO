@@ -373,7 +373,7 @@ function parseDelimited(text){
   const rows = lines.slice(1).map(l=>l.split(delim));
   return {headerCells, rows};
 }
-const GSHEET_ID = "1vviZWjfSYNOAf-Ic9X0DeUp5-F1CWg3rDEBcP67PSuY";
+const GSHEET_ID = "1hefgIAhOne-eK2JM9VKidrqkjroWVpSq89bUXBDWYqs";
 const GSHEET_GID = "0";
 function gsheetSetBtn(disabled, label){
   const btn = document.getElementById("gsheetBtn");
@@ -503,7 +503,7 @@ function renderGeneralPanel(){
       <button class="btn-accent" id="gsheetBtn" style="padding:13px 22px;font-size:14px;" data-action="import-gsheet">🌐 Charger automatiquement depuis le Google Sheet</button>
       <span class="hint">Nécessite une connexion internet et que le fichier soit partagé en lecture (« Toute personne disposant du lien »). Répartit directement chaque élève dans sa classe (4e1 à 4e4).</span>
     </div>
-    <p class="hint" style="margin-top:10px;">Classeur source : <a href="https://docs.google.com/spreadsheets/d/1vviZWjfSYNOAf-Ic9X0DeUp5-F1CWg3rDEBcP67PSuY/edit?gid=0#gid=0" target="_blank" rel="noopener">ouvrir le Google Sheet</a>.</p>
+    <p class="hint" style="margin-top:10px;">Classeur source : <a href="https://docs.google.com/spreadsheets/d/1hefgIAhOne-eK2JM9VKidrqkjroWVpSq89bUXBDWYqs/edit?gid=0#gid=0" target="_blank" rel="noopener">ouvrir le Google Sheet</a>.</p>
     <div class="row" style="margin-top:10px;">
       <label class="btn" style="display:inline-block;">📁 Si le chargement automatique échoue : importer un fichier .csv exporté du collège
         <input type="file" accept=".csv,.tsv,.txt" id="importCsvFile" style="display:none;">
