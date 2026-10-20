@@ -145,6 +145,16 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 .lightbox{position:fixed;inset:0;background:rgba(10,15,25,.92);z-index:1000;display:flex;align-items:center;justify-content:center;padding:30px;cursor:zoom-out;}
 .lightbox img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6);}
 .lightbox .lb-close{position:fixed;top:16px;right:20px;background:#fff2;color:#fff;border:1px solid #fff5;border-radius:50%;width:38px;height:38px;font-size:18px;line-height:1;}
+.modal-overlay{position:fixed;inset:0;background:rgba(10,15,25,.55);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal-box{background:#fff;border-radius:12px;max-width:480px;width:100%;padding:22px;box-shadow:0 10px 50px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;}
+.modal-box h2{margin-top:0;}
+.modal-box .field{margin-bottom:10px;}
+.modal-box .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px;}
+.modal-box .field input{width:100%;padding:8px;border:1px solid var(--line);border-radius:7px;font-size:13px;}
+.sync-status{font-size:11px;padding:3px 9px;border-radius:20px;background:#0003;color:#fff;}
+.sync-status.ok{background:#1f9d5533;color:#eafaf0;}
+.sync-status.error{background:#d3332c55;color:#fff;}
+.sync-status.loading{background:#0006;color:#fff;}
 
 @media (max-width:900px){
   body{font-size:13px;}
@@ -162,7 +172,9 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
     <div class="sub">Collège — suivi des séances, parcours et balises</div>
   </div>
   <div class="top-actions">
+    <span id="syncStatus" class="sync-status" style="display:none;"></span>
     <div class="clock" id="liveClock">--:--:--</div>
+    <button class="btn-ghost" data-action="open-sync-settings">🔄 Synchronisation GitHub</button>
     <button class="btn-ghost" data-action="export-backup">💾 Exporter sauvegarde</button>
     <label class="btn-ghost" style="display:inline-block;">📂 Importer sauvegarde
       <input type="file" accept=".json" id="importBackupFile" style="display:none;">
@@ -176,6 +188,23 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 <div id="lightbox" class="lightbox" style="display:none;" data-action="close-lightbox">
   <button class="lb-close" data-action="close-lightbox">✕</button>
   <img id="lightboxImg" src="" alt="">
+</div>
+
+<div id="syncModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h2>🔄 Synchronisation GitHub</h2>
+    <p class="hint">Synchronise automatiquement les données (élèves, séances, cartes…) entre vos appareils via un dépôt GitHub. Le jeton reste uniquement stocké dans ce navigateur, jamais publié dans le code.</p>
+    <div class="field"><label>Jeton d'accès (fine-grained)</label><input type="password" id="syncToken" placeholder="github_pat_..." autocomplete="off"></div>
+    <div class="field"><label>Propriétaire du dépôt (compte GitHub)</label><input type="text" id="syncOwner" placeholder="ex: epscrozier69"></div>
+    <div class="field"><label>Nom du dépôt</label><input type="text" id="syncRepo" placeholder="ex: CO"></div>
+    <div class="field"><label>Branche</label><input type="text" id="syncBranch" placeholder="main" value="main"></div>
+    <div class="row" style="margin-top:14px;">
+      <button class="btn-accent" data-action="save-sync-settings">💾 Enregistrer et synchroniser</button>
+      <button class="btn" data-action="close-sync-settings">Fermer</button>
+      <button class="btn-danger btn-small" data-action="clear-sync-settings">Désactiver la synchronisation</button>
+    </div>
+    <p class="hint" id="syncModalStatus" style="margin-top:10px;"></p>
+  </div>
 </div>
 
 <div class="footer-note">Données stockées localement dans ce navigateur (hors connexion). Pensez à exporter une sauvegarde régulièrement.</div>
@@ -194,8 +223,9 @@ function loadState(){
   try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
   return defaultState();
 }
-function saveState(){
+function saveState(skipSync){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ alert("Attention : sauvegarde locale impossible (stockage plein). Exportez une sauvegarde JSON."); }
+  if(!skipSync) scheduleGithubPush();
 }
 function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{} }; }
 function loadUI(){
@@ -309,6 +339,138 @@ function migrateLegacyImages(){
   return Promise.all(tasks).then(()=>{ if(changed) saveState(); });
 }
 
+/* ===================== SYNCHRONISATION GITHUB =====================
+   Le jeton et les infos du dépôt sont stockés uniquement en localStorage sur cet appareil
+   (jamais dans le code source, jamais dans les sauvegardes JSON exportées).
+   Le fichier distant regroupe état + images, comme la sauvegarde manuelle, et sert de point
+   de synchronisation "dernière écriture gagne" entre vos appareils. */
+const SYNC_CONFIG_KEY = "CO_sync_config";
+const SYNC_LAST_AT_KEY = "CO_last_sync_at";
+const SYNC_PATH = "data/co-sync.json";
+let remoteSha = null;
+let githubSyncing = false;
+let githubPushTimer = null;
+
+function getSyncConfig(){
+  try{ return JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)||"null"); }catch(e){ return null; }
+}
+function saveSyncConfigLS(cfg){ localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg)); }
+function clearSyncConfigLS(){ localStorage.removeItem(SYNC_CONFIG_KEY); localStorage.removeItem(SYNC_LAST_AT_KEY); remoteSha = null; }
+
+function b64EncodeUnicode(str){
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  bytes.forEach(function(b){ binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+function b64DecodeUnicode(str){
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function githubHeaders(token){
+  return { "Authorization":"Bearer "+token, "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28" };
+}
+function githubContentsUrl(cfg){
+  return "https://api.github.com/repos/"+encodeURIComponent(cfg.owner)+"/"+encodeURIComponent(cfg.repo)+"/contents/"+SYNC_PATH;
+}
+function githubFetchRemote(cfg){
+  return fetch(githubContentsUrl(cfg)+"?ref="+encodeURIComponent(cfg.branch||"main"), {headers: githubHeaders(cfg.token)})
+    .then(function(res){
+      if(res.status===404) return {sha:null, data:null};
+      if(!res.ok) return res.text().then(function(t){ throw new Error("HTTP "+res.status+(t?" — "+t.slice(0,200):"")); });
+      return res.json().then(function(j){
+        const text = b64DecodeUnicode(j.content.replace(/\n/g,""));
+        return {sha:j.sha, data:JSON.parse(text)};
+      });
+    });
+}
+function githubPushRemote(cfg, payload, sha){
+  const body = {
+    message: "Sync CO — "+new Date().toISOString(),
+    content: b64EncodeUnicode(JSON.stringify(payload)),
+    branch: cfg.branch||"main"
+  };
+  if(sha) body.sha = sha;
+  return fetch(githubContentsUrl(cfg), {
+    method:"PUT",
+    headers: Object.assign({"Content-Type":"application/json"}, githubHeaders(cfg.token)),
+    body: JSON.stringify(body)
+  }).then(function(res){
+    if(!res.ok) return res.text().then(function(t){ throw new Error("HTTP "+res.status+(t?" — "+t.slice(0,200):"")); });
+    return res.json();
+  });
+}
+
+function updateSyncStatusUI(status, timestamp, errMsg){
+  const el = document.getElementById("syncStatus");
+  if(!el) return;
+  if(status==="off"){ el.style.display="none"; return; }
+  el.style.display = "inline-block";
+  el.className = "sync-status "+status;
+  if(status==="loading") el.textContent = "⏳ Synchronisation…";
+  else if(status==="ok") el.textContent = "✅ Synchronisé "+(timestamp?fmtClock(timestamp):"");
+  else if(status==="error") el.textContent = "⚠️ Erreur de synchronisation";
+  if(errMsg){
+    const modalEl = document.getElementById("syncModalStatus");
+    if(modalEl) modalEl.textContent = "Erreur : "+errMsg;
+  }
+}
+
+function doGithubPush(){
+  const cfg = getSyncConfig();
+  if(!cfg || !cfg.token) return Promise.resolve();
+  if(githubSyncing) return Promise.resolve();
+  githubSyncing = true;
+  updateSyncStatusUI("loading");
+  const payload = { updatedAt: Date.now(), state: state, images: imageCache };
+  return githubPushRemote(cfg, payload, remoteSha)
+    .then(function(resp){
+      remoteSha = resp.content.sha;
+      localStorage.setItem(SYNC_LAST_AT_KEY, String(payload.updatedAt));
+      updateSyncStatusUI("ok", payload.updatedAt);
+    })
+    .catch(function(err){
+      updateSyncStatusUI("error", null, err.message);
+    })
+    .finally(function(){ githubSyncing = false; });
+}
+function scheduleGithubPush(){
+  const cfg = getSyncConfig();
+  if(!cfg || !cfg.token) return;
+  clearTimeout(githubPushTimer);
+  githubPushTimer = setTimeout(doGithubPush, 4000);
+}
+function syncOnLoad(){
+  const cfg = getSyncConfig();
+  if(!cfg || !cfg.token){ updateSyncStatusUI("off"); return Promise.resolve(); }
+  updateSyncStatusUI("loading");
+  return githubFetchRemote(cfg).then(function(res){
+    remoteSha = res.sha;
+    const data = res.data;
+    const lastLocalSyncAt = Number(localStorage.getItem(SYNC_LAST_AT_KEY)||0);
+    if(data && data.updatedAt && data.updatedAt > lastLocalSyncAt){
+      state = data.state || defaultState();
+      const newImages = data.images || {};
+      const putTasks = Object.keys(newImages).map(function(id){
+        imageCache[id] = newImages[id];
+        return idbPut(id, newImages[id]).catch(function(){});
+      });
+      return Promise.all(putTasks).then(function(){
+        saveState(true);
+        localStorage.setItem(SYNC_LAST_AT_KEY, String(data.updatedAt));
+        updateSyncStatusUI("ok", data.updatedAt);
+        renderApp();
+      });
+    }
+    return doGithubPush();
+  }).catch(function(err){
+    updateSyncStatusUI("error", null, err.message);
+  });
+}
+
 function uid(){ return "id"+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 function normalize(s){ return (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim(); }
 function escAttr(s){ return (s||"").toString().replace(/"/g,"&quot;"); }
@@ -355,6 +517,16 @@ function ensureSeance(cls, num){
 function ensureGroupesSitu(se, situ){
   if(!se.groupesBySitu[situ]) se.groupesBySitu[situ] = [];
   return se.groupesBySitu[situ];
+}
+/* Quand les binômes de la 1ère situation d'une séance sont modifiés, ils sont recopiés
+   automatiquement vers la 2ème situation UNIQUEMENT si celle-ci n'a pas encore ses propres groupes
+   (pour ne jamais écraser une composition volontairement différente). */
+function syncGroupesToNextSitu(se, num, situ){
+  const situs = SITUATIONS_BY_SEANCE[num] || [];
+  if(situs[0]!==situ || !situs[1]) return;
+  const target = situs[1];
+  if(ensureGroupesSitu(se, target).length) return;
+  se.groupesBySitu[target] = ensureGroupesSitu(se, situ).map(g=>({id:uid(), memberIds:[...g.memberIds]}));
 }
 function isPresent(se, studentId){
   const p = se.presence && se.presence[studentId];
@@ -657,6 +829,11 @@ function applyEtoileRotation(se, num){
   }
 }
 const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", bareme:"📐 Barème" };
+const SA_LABELS = {
+  1: {suivi:"SA2", etoile:"SA3"},
+  2: {etoile:"SA1", papillon:"SA2"},
+  3: {papillon:"SA1", scores:"SA2"}
+};
 
 function renderSeancePanel(cls, num){
   const se = ensureSeance(cls, num);
@@ -675,7 +852,8 @@ function renderSeancePanel(cls, num){
     ${renderPresence(cls, num)}
     <hr class="sep">
   `;
-  const subTabs = situs.map(id=>({id, label:SITU_LABEL[id]}));
+  const saLabels = SA_LABELS[num] || {};
+  const subTabs = situs.map(id=>({id, label:(saLabels[id]?saLabels[id]+" – ":"")+SITU_LABEL[id]}));
   const situationBody = renderSituationBody(cls, num, active);
   return header + tabBar(subTabs, active, "set-seance-tab", `data-class="${escAttr(cls)}" data-seance="${num}"`, 3) +
     `<div class="tabpanel" style="box-shadow:none;">${situationBody}</div>`;
@@ -697,8 +875,9 @@ function pendingKey(cls, num, situ){ return cls+"_s"+num+"_"+situ; }
 function renderGroupesSection(cls, num, situ){
   const se = ensureSeance(cls, num);
   const groupes = ensureGroupesSitu(se, situ);
+  const saLabel = (SA_LABELS[num] && SA_LABELS[num][situ]) ? SA_LABELS[num][situ]+" – " : "";
   return `
-    <h2 class="ptitle" style="margin-top:4px;">🤝 Groupes / binômes — ${SITU_LABEL[situ]}</h2>
+    <h2 class="ptitle" style="margin-top:4px;">🤝 Groupes / binômes — ${saLabel}${SITU_LABEL[situ]}</h2>
     <div class="row">
       <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}">🎲 Binômes au hasard (présents)</button>
       <span class="hint">${groupes.length} groupe(s) constitué(s) pour cette situation. Composez-les vous-même en cliquant sur deux élèves ci-dessous ; modifiez-les ensuite directement dans le tableau.</span>
@@ -998,6 +1177,7 @@ app.addEventListener("click", function(e){
     se.groupesBySitu[situ] = groupes;
     se[situ].rows = {};
     applyEtoileRotation(se, Number(num));
+    syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
   if(action==="toggle-presence"){
@@ -1052,12 +1232,14 @@ app.addEventListener("click", function(e){
     const se=ensureSeance(cls,num);
     se.groupesBySitu[situ] = ensureGroupesSitu(se,situ).filter(g=>g.id!==gid);
     applyEtoileRotation(se, Number(num));
+    syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
   if(action==="remove-from-groupe"){
     const se=ensureSeance(cls,num);
     const g=ensureGroupesSitu(se,situ).find(g=>g.id===gid);
     if(g) g.memberIds=g.memberIds.filter(id=>id!==sid);
+    syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
   if(action==="pick-student"){
@@ -1069,6 +1251,7 @@ app.addEventListener("click", function(e){
       const se = ensureSeance(cls,num);
       ensureGroupesSitu(se,situ).push({id:uid(), memberIds:[prev, sid]});
       applyEtoileRotation(se, Number(num));
+      syncGroupesToNextSitu(se, Number(num), situ);
       pendingSelection[key] = null;
       saveState();
     }
@@ -1082,6 +1265,7 @@ app.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     const g = ensureGroupesSitu(se,situ).find(g=>g.id===gid);
     if(g && !g.memberIds.includes(pending)) g.memberIds.push(pending);
+    syncGroupesToNextSitu(se, Number(num), situ);
     pendingSelection[key] = null;
     saveState(); renderApp();
     return;
@@ -1168,6 +1352,40 @@ app.addEventListener("click", function(e){
     saveState(); renderApp(); return;
   }
 
+  if(action==="open-sync-settings"){
+    const cfg = getSyncConfig() || {};
+    document.getElementById("syncToken").value = cfg.token || "";
+    document.getElementById("syncOwner").value = cfg.owner || "";
+    document.getElementById("syncRepo").value = cfg.repo || "";
+    document.getElementById("syncBranch").value = cfg.branch || "main";
+    document.getElementById("syncModalStatus").textContent = cfg.token ? "Synchronisation active sur cet appareil." : "Synchronisation non configurée sur cet appareil.";
+    document.getElementById("syncModal").style.display = "flex";
+    return;
+  }
+  if(action==="close-sync-settings"){ document.getElementById("syncModal").style.display = "none"; return; }
+  if(action==="save-sync-settings"){
+    const token = document.getElementById("syncToken").value.trim();
+    const owner = document.getElementById("syncOwner").value.trim();
+    const repo = document.getElementById("syncRepo").value.trim();
+    const branch = document.getElementById("syncBranch").value.trim() || "main";
+    if(!token || !owner || !repo){ document.getElementById("syncModalStatus").textContent = "Veuillez remplir le jeton, le propriétaire et le dépôt."; return; }
+    saveSyncConfigLS({token, owner, repo, branch});
+    remoteSha = null;
+    document.getElementById("syncModalStatus").textContent = "Connexion en cours…";
+    syncOnLoad().then(function(){
+      const errEl = document.getElementById("syncStatus");
+      document.getElementById("syncModalStatus").textContent = (errEl && errEl.classList.contains("error")) ? "Échec de connexion — vérifiez le jeton, le propriétaire et le dépôt." : "Synchronisation active et à jour.";
+    });
+    return;
+  }
+  if(action==="clear-sync-settings"){
+    if(!confirm("Désactiver la synchronisation GitHub sur cet appareil ? Vos données restent sauvegardées localement.")) return;
+    clearSyncConfigLS();
+    updateSyncStatusUI("off");
+    document.getElementById("syncModalStatus").textContent = "Synchronisation désactivée sur cet appareil.";
+    document.getElementById("syncToken").value = "";
+    return;
+  }
   if(action==="export-backup"){
     const exportObj = { state: state, images: imageCache };
     const blob = new Blob([JSON.stringify(exportObj)], {type:"application/json"});
@@ -1178,10 +1396,12 @@ app.addEventListener("click", function(e){
     return;
   }
   if(action==="reset-all"){
-    if(confirm("Supprimer définitivement toutes les données (classes, séances, cartes) ? Cette action est irréversible — exportez une sauvegarde avant si besoin.")){
+    const cfg = getSyncConfig();
+    const syncNote = cfg && cfg.token ? "\n\nLa copie synchronisée sur GitHub ne sera PAS modifiée automatiquement (utilisez « Synchroniser maintenant » ensuite si vous voulez aussi l'effacer là-bas)." : "";
+    if(confirm("Supprimer définitivement toutes les données (classes, séances, cartes) sur cet appareil ? Cette action est irréversible."+syncNote)){
       Object.keys(imageCache).forEach(id=>{ idbDelete(id).catch(()=>{}); });
       imageCache = {};
-      state = defaultState(); saveState();
+      state = defaultState(); saveState(true);
       uiState = defaultUI(); saveUI();
       renderApp();
     }
@@ -1294,7 +1514,10 @@ setInterval(()=>{
 
 /* ===================== INIT ===================== */
 renderApp();
-idbGetAll().then(function(map){ imageCache = map; return migrateLegacyImages(); }).then(renderApp).catch(function(){ renderApp(); });
+updateSyncStatusUI(getSyncConfig() && getSyncConfig().token ? "loading" : "off");
+idbGetAll().then(function(map){ imageCache = map; return migrateLegacyImages(); }).then(renderApp)
+  .then(syncOnLoad)
+  .catch(function(){ renderApp(); });
 
 /* Hors ligne (une fois ouverte au moins une fois) : nécessite une page servie en https (GitHub Pages).
    Ne fonctionne pas en ouvrant le fichier directement (file://), ce qui est normal. */
