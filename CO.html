@@ -221,7 +221,7 @@ let state = loadState();
 let uiState = loadUI();
 
 function defaultState(){
-  return { classes:{}, cartes:[] };
+  return { classes:{}, cartes:[], bareme:{} };
 }
 function loadState(){
   try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
@@ -231,7 +231,7 @@ function saveState(skipSync){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ alert("Attention : sauvegarde locale impossible (stockage plein). Exportez une sauvegarde JSON."); }
   if(!skipSync) scheduleGithubPush();
 }
-function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{} }; }
+function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{}, baremeTab:"s1" }; }
 function loadUI(){
   try{ const raw = localStorage.getItem(UI_KEY); if(raw) return Object.assign(defaultUI(), JSON.parse(raw)); }catch(e){}
   return defaultUI();
@@ -340,6 +340,20 @@ function migrateLegacyImages(){
       }
     });
   });
+  /* Barème : fusionne les anciennes photos importées par classe vers l'onglet global partagé. */
+  Object.values(state.classes||{}).forEach(c=>{
+    Object.entries(c.seances||{}).forEach(function(entry){
+      const num = Number(entry[0].replace("s",""));
+      const se = entry[1];
+      if(se.bareme && Array.isArray(se.bareme.images) && se.bareme.images.length){
+        const target = ensureBaremeSeance(num);
+        se.bareme.images.forEach(function(imgId){
+          if(imgId && target.images.indexOf(imgId)<0){ target.images.push(imgId); changed = true; }
+        });
+        se.bareme.images = [];
+      }
+    });
+  });
   return Promise.all(tasks).then(()=>{ if(changed) saveState(); });
 }
 
@@ -386,8 +400,16 @@ function githubFetchRemote(cfg){
       if(res.status===404) return {sha:null, data:null};
       if(!res.ok) return res.text().then(function(t){ throw new Error("HTTP "+res.status+(t?" — "+t.slice(0,200):"")); });
       return res.json().then(function(j){
-        const text = b64DecodeUnicode(j.content.replace(/\n/g,""));
-        return {sha:j.sha, data:JSON.parse(text)};
+        if(j.content){
+          const text = b64DecodeUnicode(j.content.replace(/\n/g,""));
+          return {sha:j.sha, data:JSON.parse(text)};
+        }
+        /* Fichier > 1 Mo : l'API Contents ne renvoie pas le contenu inline, on le télécharge directement. */
+        if(!j.download_url) throw new Error("fichier trop volumineux, aucune URL de téléchargement fournie par GitHub");
+        return fetch(j.download_url).then(function(res2){
+          if(!res2.ok) throw new Error("téléchargement du fichier distant échoué (HTTP "+res2.status+")");
+          return res2.text().then(function(text2){ return {sha:j.sha, data:JSON.parse(text2)}; });
+        });
       });
     });
 }
@@ -689,12 +711,13 @@ function renderApp(){
   const classNames = CLASSES_COLLEGE.concat(extraClasses);
   const topTabs = [{id:"general", label:"📋 Général"}]
     .concat(classNames.map((c,i)=>({id:c, label:"🏷️ "+c, badge:(state.classes[c]?state.classes[c].students.length:0), extraClass:"class-tab col-c"+(i%PALETTE_COUNT)})))
-    .concat([{id:"cartes", label:"🗺️ Cartes du parc"}]);
+    .concat([{id:"cartes", label:"🗺️ Cartes du parc"}, {id:"bareme", label:"📐 Barème"}]);
   if(!topTabs.some(t=>t.id===uiState.top)) uiState.top = "general";
 
   let panel = "";
   if(uiState.top==="general") panel = renderGeneralPanel();
   else if(uiState.top==="cartes") panel = renderCartesPanel();
+  else if(uiState.top==="bareme") panel = renderBaremePanel();
   else panel = renderClassPanel(uiState.top);
 
   const html = tabBar(topTabs, uiState.top, "set-top-tab", "", 1) + `<div class="tabpanel">${panel}</div>`;
@@ -835,7 +858,7 @@ function applyEtoileRotation(se, num){
     });
   }
 }
-const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", bareme:"📐 Barème" };
+const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores" };
 const SA_LABELS = {
   1: {suivi:"SA2", etoile:"SA3"},
   2: {etoile:"SA1", papillon:"SA2"},
@@ -844,7 +867,7 @@ const SA_LABELS = {
 
 function renderSeancePanel(cls, num){
   const se = ensureSeance(cls, num);
-  const situs = SITUATIONS_BY_SEANCE[num].concat(["bareme"]);
+  const situs = SITUATIONS_BY_SEANCE[num];
   const seKey = cls+"_s"+num;
   let active = uiState.seanceTab[seKey] || situs[0];
   if(!situs.includes(active)){ active = situs[0]; uiState.seanceTab[seKey] = active; }
@@ -871,7 +894,6 @@ function renderSituationBody(cls, num, type){
   if(type==="etoile") return renderEtoile(cls,num);
   if(type==="papillon") return renderPapillon(cls,num);
   if(type==="scores") return renderScores(cls,num);
-  if(type==="bareme") return renderBaremeBody(cls,num);
   return "";
 }
 
@@ -947,23 +969,35 @@ function rowColorStyle(gi){
   return `background:${c.bg};color:${c.text};`;
 }
 
-/* ---------- Barème ---------- */
-function renderBaremeBody(cls, num){
-  const se = ensureSeance(cls,num);
-  const imgs = se.bareme.images||[];
-  return `
+/* ---------- Barème (onglet global, partagé par toutes les classes) ---------- */
+function ensureBaremeSeance(num){
+  if(!state.bareme) state.bareme = {};
+  const key = "s"+num;
+  if(!state.bareme[key]) state.bareme[key] = {images:[]};
+  return state.bareme[key];
+}
+function renderBaremePanel(){
+  const subTabs = [1,2,3].map(n=>({id:"s"+n, label:"Séance "+n}));
+  let active = uiState.baremeTab || "s1";
+  if(!subTabs.some(t=>t.id===active)) active = "s1";
+  const num = Number(active.slice(1));
+  const b = ensureBaremeSeance(num);
+  const imgs = b.images||[];
+  const body = `
     <h2 class="ptitle">📐 Barème (photo) — Séance ${num}</h2>
+    <p class="hint">Ce barème est commun à toutes les classes pour cette séance.</p>
     <label class="btn" style="display:inline-block;">📷 Ajouter une photo du barème
-      <input type="file" accept="image/*" data-action="upload-image" data-target="bareme" data-class="${escAttr(cls)}" data-seance="${num}" style="display:none;">
+      <input type="file" accept="image/*" data-action="upload-image" data-target="bareme-global" data-seance="${num}" style="display:none;">
     </label>
     <div class="img-grid" style="margin-top:10px;">
       ${imgs.map((imgId,i)=>`
         <div class="img-card">${imageCache[imgId] ? `<img src="${imageCache[imgId]}" data-action="open-lightbox" title="Cliquer pour agrandir">` : `<div class="empty">Chargement de l'image…</div>`}
           <div class="cap"><span>Barème ${i+1}</span>
-          <button class="btn-xs btn-danger" data-action="delete-image" data-target="bareme" data-class="${escAttr(cls)}" data-seance="${num}" data-index="${i}">✕</button></div>
+          <button class="btn-xs btn-danger" data-action="delete-image" data-target="bareme-global" data-seance="${num}" data-index="${i}">✕</button></div>
         </div>`).join("") || "<div class=\"empty\">Aucune photo de barème ajoutée.</div>"}
     </div>
   `;
+  return tabBar(subTabs, active, "set-bareme-tab", "", 2) + `<div class="tabpanel" style="box-shadow:none;">${body}</div>`;
 }
 
 /* ===================== SITUATIONS ===================== */
@@ -1162,6 +1196,7 @@ document.addEventListener("click", function(e){
   if(action==="set-top-tab"){ uiState.top = t.dataset.id; saveUI(); renderApp(); return; }
   if(action==="set-class-tab"){ uiState.classTab[cls] = t.dataset.id; saveUI(); renderApp(); return; }
   if(action==="set-seance-tab"){ uiState.seanceTab[cls+"_s"+num] = t.dataset.id; saveUI(); renderApp(); return; }
+  if(action==="set-bareme-tab"){ uiState.baremeTab = t.dataset.id; saveUI(); renderApp(); return; }
 
   if(action==="import-gsheet"){ importFromGoogleSheet(); return; }
 
@@ -1198,7 +1233,7 @@ document.addEventListener("click", function(e){
     return;
   }
   if(action==="delete-seance"){
-    if(!confirm("Supprimer toutes les données de la Séance "+num+" (date, présence, groupes, parcours, barème) ? Action irréversible.")) return;
+    if(!confirm("Supprimer toutes les données de la Séance "+num+" pour cette classe (date, présence, groupes, parcours) ? Le barème (partagé entre classes) n'est pas affecté. Action irréversible.")) return;
     const c = ensureClass(cls);
     const se = c.seances && c.seances["s"+num];
     if(se && se.bareme && se.bareme.images){
@@ -1353,6 +1388,7 @@ document.addEventListener("click", function(e){
     const target = t.dataset.target, i = Number(t.dataset.index);
     let imgId;
     if(target==="cartes"){ imgId = state.cartes[i].imgId; state.cartes.splice(i,1); }
+    else if(target==="bareme-global"){ const bs = ensureBaremeSeance(Number(num)); imgId = bs.images[i]; bs.images.splice(i,1); }
     else { const se = ensureSeance(cls,num); imgId = se.bareme.images[i]; se.bareme.images.splice(i,1); }
     delete imageCache[imgId];
     idbDelete(imgId).catch(()=>{});
@@ -1465,6 +1501,8 @@ document.addEventListener("change", function(e){
       if(target==="cartes"){
         state.cartes = state.cartes||[];
         state.cartes.push({id:uid(), label:file.name, imgId:imgId});
+      } else if(target==="bareme-global"){
+        ensureBaremeSeance(Number(num)).images.push(imgId);
       } else {
         const se = ensureSeance(cls,num);
         se.bareme.images.push(imgId);
