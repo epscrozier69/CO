@@ -98,7 +98,7 @@ table.co th,table.co td{border:1px solid var(--line);padding:5px 9px;white-space
 table.co td.left,table.co th.left{text-align:left;}
 table.co thead th{color:#fff;font-weight:700;position:sticky;top:0;}
 table.co tbody tr:nth-child(even){background:#f8fafc;}
-table.co tbody tr:hover{background:#eef5ff;}
+table.co tbody tr:hover{filter:brightness(0.97);}
 .col-c0{background:#2563eb;} .col-c1{background:#7c3aed;} .col-c2{background:#db2777;}
 .col-c3{background:#ea580c;} .col-c4{background:#0891b2;} .col-c5{background:#d97706;}
 .col-c6{background:#dc2626;} .col-c7{background:#4f46e5;} .col-c8{background:#c026d3;}
@@ -128,7 +128,7 @@ table.co tbody tr:hover{background:#eef5ff;}
 .presence-chip:hover{filter:brightness(0.97);}
 .presence-chip.presence-ok{border-color:#2563eb;background:#eaf1fd;color:#1a4fc4;}
 .presence-chip.presence-abs{border-color:#d3332c;background:#fdeceb;color:#9c1f1a;text-decoration:line-through;}
-.presence-chip.presence-disp{border-color:#6d4fc2;background:#f1edfb;color:#4a3494;text-decoration:line-through;}
+.presence-chip.presence-disp{border-color:#e08c00;background:#fdf2e0;color:#8a5600;text-decoration:line-through;}
 .presence-chip .pc-icon{font-size:13px;}
 select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;}
 input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
@@ -635,20 +635,24 @@ function ensureEtoileRow(se, gid, nb){
   return se.etoile.rows[gid];
 }
 function applyEtoileRotation(se, num){
+  /* Ne remplit que les parcours prévus vides : ne remplace jamais une correction manuelle (✏️)
+     ou une répartition déjà assignée. Appelée aussi au rendu pour rattraper les groupes créés avant cette fonctionnalité. */
   const groupes = se.groupesBySitu.etoile || [];
   if(!groupes.length) return;
   if(num===2){
     const order = ETOILE_BALISE_ORDER_S2, n = order.length;
     groupes.forEach((g,i)=>{
+      const row = ensureEtoileRow(se, g.id, n);
+      if(row.prevu) return;
       const shift = i%n;
-      const rot = order.slice(shift).concat(order.slice(0,shift));
-      ensureEtoileRow(se, g.id, n).prevu = rot.join(",");
+      row.prevu = order.slice(shift).concat(order.slice(0,shift)).join(",");
     });
   } else if(num===1){
     const n = ETOILE_GROUPS_SEQ_S1.length;
     groupes.forEach((g,i)=>{
-      const seq = ETOILE_GROUPS_SEQ_S1[i % n];
-      ensureEtoileRow(se, g.id, 5).prevu = seq.join(",");
+      const row = ensureEtoileRow(se, g.id, 5);
+      if(row.prevu) return;
+      row.prevu = ETOILE_GROUPS_SEQ_S1[i % n].join(",");
     });
   }
 }
@@ -733,12 +737,28 @@ function groupeCellHtml(cls, num, situ, g, gi){
     <div style="font-weight:800;">Groupe ${gi+1}${pending?" ➕":""}</div>
     <div>${g.memberIds.map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffff30;color:#fff;">${escHtml(s?(s.prenom||s.nom):"?")}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;">${escHtml(s?(s.prenom||s.nom):"?")}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
     <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" style="margin-top:3px;">supprimer groupe</button>
   </div>`;
+}
+const ROW_COLORS = [
+  {bg:"#eaf1fd", text:"#1a3f8f"},
+  {bg:"#f1edfb", text:"#4a3494"},
+  {bg:"#fdeef5", text:"#9c1f5c"},
+  {bg:"#fdf2e0", text:"#8a5600"},
+  {bg:"#e3f4f6", text:"#0b5e68"},
+  {bg:"#fdf6e0", text:"#7a6400"},
+  {bg:"#fdeceb", text:"#9c2a24"},
+  {bg:"#eceefd", text:"#3b3fa0"},
+  {bg:"#fbeafd", text:"#8c2a96"},
+  {bg:"#eef1f4", text:"#3c4654"}
+];
+function rowColorStyle(gi){
+  const c = ROW_COLORS[gi % ROW_COLORS.length];
+  return `background:${c.bg};color:${c.text};`;
 }
 
 /* ---------- Barème ---------- */
@@ -778,8 +798,8 @@ function renderSuivi(cls, num){
     const r = se.suivi.rows[g.id] || {depart:null, log:[], retour:null, obs:""};
     se.suivi.rows[g.id]=r;
     const total = (r.depart && r.retour) ? fmtElapsed(r.retour-r.depart) : "";
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+    return `<tr style="${rowColorStyle(gi)}">
+      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="suivi-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left" style="max-width:260px;white-space:normal;">
         ${r.log.map((l,li)=>`<span class="chip">${escHtml(l.code)} (${fmtClock(l.ts)})
@@ -804,6 +824,7 @@ function renderEtoile(cls, num){
   const situ = "etoile";
   const groupes = ensureGroupesSitu(se, situ);
   const nb = ETOILE_BALISES[num] || 5;
+  applyEtoileRotation(se, Number(num));
   const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
   if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
   const maxTotalMs = num===2 ? 90*60*1000 : null;
@@ -831,8 +852,8 @@ function renderEtoile(cls, num){
       }
       return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span><button class="btn-xs" style="display:block;margin:2px auto 0;" data-action="edit-balise-code" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}" title="Modifier le numéro de cette balise">✏️</button></td>`;
     }).join("");
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+    return `<tr style="${rowColorStyle(gi)}">
+      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: 59,53,47)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="etoile-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       ${balisesHtml}
@@ -875,8 +896,8 @@ function renderPapillon(cls, num){
       let timeHtml = (p.status==="ok" && p.time && r.depart)? `<span class="time-tag green">${fmtElapsed(p.time-r.depart)}</span>` : "";
       return `<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div>`;
     }
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+    return `<tr style="${rowColorStyle(gi)}">
+      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="papillon-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left">${parcoursCell(r.p1,1)}</td>
       <td class="left">${parcoursCell(r.p2,2)}</td>
@@ -902,8 +923,8 @@ function renderScores(cls, num){
     se.scores.rows[g.id]=r;
     const total = r.found.reduce((s,f)=>s+(Number(f.points)||0),0);
     const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+    return `<tr style="${rowColorStyle(gi)}">
+      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="scores-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left" style="max-width:260px;white-space:normal;">
         ${r.found.map((f,fi)=>`<span class="chip">${escHtml(f.code)} (${f.points}pt)
