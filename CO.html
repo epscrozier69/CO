@@ -117,6 +117,19 @@ table.co tbody tr:hover{background:#eef5ff;}
 .chip button{padding:0 4px;background:none;color:#9c1f1a;font-weight:900;font-size:12px;}
 .groupe-card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:#fbfcfe;}
 .groupe-card .gtitle{font-weight:700;font-size:12.5px;margin-bottom:4px;color:var(--navy2);}
+.groupe-card-droppable{cursor:pointer;border:2px dashed var(--accent2);background:#e9fbf8;}
+.groupe-card-droppable .gtitle{color:#07332c;}
+.pool{display:flex;flex-wrap:wrap;gap:6px;border:1px dashed var(--line);border-radius:8px;padding:10px;margin-bottom:10px;}
+.student-chip{padding:9px 16px;margin:0;border-radius:22px;border:2px solid var(--line);background:#fff;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink);}
+.student-chip:hover{border-color:var(--accent2);}
+.student-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+.presence-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.presence-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:2px solid var(--line);background:#fff;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink);}
+.presence-chip:hover{filter:brightness(0.97);}
+.presence-chip.presence-ok{border-color:#1f9d55;background:#eafaf0;color:#0f6b36;}
+.presence-chip.presence-abs{border-color:#d3332c;background:#fdeceb;color:#9c1f1a;text-decoration:line-through;}
+.presence-chip.presence-disp{border-color:#6d4fc2;background:#f1edfb;color:#4a3494;text-decoration:line-through;}
+.presence-chip .pc-icon{font-size:13px;}
 select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;}
 input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
 input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;width:90%;}
@@ -534,40 +547,51 @@ function renderClassPanel(cls){
   return tabBar(subTabs, activeFinal, "set-class-tab", `data-class="${escAttr(cls)}"`, 2) + `<div class="tabpanel" style="box-shadow:none;">${body}</div>`;
 }
 
+function twoColTable(headHtml, items, rowFn, colspan, emptyMsg){
+  if(!items.length){
+    return `<div class="table-wrap"><table class="co"><thead><tr>${headHtml}</tr></thead>
+      <tbody><tr><td colspan="${colspan}" class="empty">${emptyMsg}</td></tr></tbody></table></div>`;
+  }
+  const mid = Math.ceil(items.length/2);
+  const cols = [items.slice(0,mid), items.slice(mid)].filter(c=>c.length);
+  const build = (list)=>`<div class="table-wrap" style="flex:1 1 280px;"><table class="co">
+    <thead><tr>${headHtml}</tr></thead>
+    <tbody>${list.map(rowFn).join("")}</tbody>
+  </table></div>`;
+  return `<div class="row" style="align-items:flex-start;flex-wrap:wrap;">${cols.map(build).join("")}</div>`;
+}
+
 function renderRosterBody(cls){
   const c = state.classes[cls];
-  const rowsHtml = c.students.map((s)=>`
-    <tr>
+  const rowFn = (s)=>`<tr>
       <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
       <td class="left">${escHtml(s.prenom)}</td>
-    </tr>`).join("");
+    </tr>`;
   return `
     <h2 class="ptitle">👥 Liste des élèves de la classe</h2>
     <p class="hint">Les absences et dispenses se renseignent séance par séance, directement dans chaque onglet Séance.</p>
-    <div class="table-wrap"><table class="co">
-      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th></tr></thead>
-      <tbody>${rowsHtml || "<tr><td colspan=2 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
-    </table></div>
+    ${twoColTable(`<th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th>`, c.students, rowFn, 2, "Aucun élève — importez la liste dans l'onglet Général.")}
   `;
 }
 
 function renderPresence(cls, num){
   const se = ensureSeance(cls, num);
   const c = state.classes[cls];
-  const rows = c.students.map((s)=>{
+  const total = c.students.length;
+  const presentCount = c.students.filter(s=>isPresent(se,s.id)).length;
+  const chips = c.students.map(s=>{
     const p = se.presence[s.id] || {absent:false, dispense:false};
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
-      <td class="left">${escHtml(s.prenom)}</td>
-      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.seances.s${num}.presence.${s.id}.absent" ${p.absent?"checked":""} data-bool="1"></td>
-      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.seances.s${num}.presence.${s.id}.dispense" ${p.dispense?"checked":""} data-bool="1"></td>
-    </tr>`;
+    let statusClass="presence-ok", icon="✓", prefix="";
+    if(p.absent){ statusClass="presence-abs"; icon="⊘"; prefix="ABS "; }
+    else if(p.dispense){ statusClass="presence-disp"; icon="⊘"; prefix="DISP "; }
+    return `<button class="presence-chip ${statusClass}" data-action="toggle-presence" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${s.id}">
+      <span class="pc-icon">${icon}</span>${prefix}${escHtml((s.nom||"").toUpperCase())} ${escHtml(s.prenom||"")}
+    </button>`;
   }).join("");
   return `
-    <div class="table-wrap"><table class="co">
-      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th><th class="col-c6">Absent</th><th class="col-c5">Dispensé</th></tr></thead>
-      <tbody>${rows || "<tr><td colspan=4 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
-    </table></div>
+    <h2 class="ptitle">🏃 Présence — Séance ${num} <span style="font-weight:600;font-size:13px;color:var(--muted);">(${presentCount}/${total} présents)</span></h2>
+    <p class="hint" style="margin-bottom:6px;">Cliquez sur un élève pour changer son statut : présent → absent → dispensé → présent.</p>
+    <div class="presence-grid">${chips || "<div class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</div>"}</div>
   `;
 }
 
@@ -589,13 +613,11 @@ function renderSeancePanel(cls, num){
         <input type="date" data-path="classes.${escAttr(cls)}.seances.s${num}.date" value="${escAttr(se.date)}">
       </div>
     </div>
-    <h2 class="ptitle">👥 Présence — Séance ${num}</h2>
     ${renderPresence(cls, num)}
     <h2 class="ptitle" style="margin-top:16px;">🤝 Groupes / binômes</h2>
     <div class="row">
       <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}">🎲 Binômes au hasard (présents)</button>
-      <button class="btn-teal" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">✋ Composer un groupe moi-même</button>
-      <span class="hint">${se.groupes.length} groupe(s) constitué(s).</span>
+      <span class="hint">${se.groupes.length} groupe(s) constitué(s). Ou composez-les vous-même en cliquant sur les élèves ci-dessous.</span>
     </div>
     ${renderGroupes(cls, num)}
     <hr class="sep">
@@ -615,33 +637,43 @@ function renderSituationBody(cls, num, type){
   return "";
 }
 
+let pendingSelection = {};
+
 function renderGroupes(cls, num){
   const se = ensureSeance(cls,num);
   const c = state.classes[cls];
   const assigned = new Set(se.groupes.flatMap(g=>g.memberIds));
   const unassigned = c.students.filter(s=>isPresent(se,s.id) && !assigned.has(s.id));
+  const key = cls+"_s"+num;
+  if(pendingSelection[key] && !unassigned.some(s=>s.id===pendingSelection[key])) pendingSelection[key] = null;
+  const pending = pendingSelection[key];
+  const pendingStudent = pending ? studentById(cls, pending) : null;
+
+  const poolHtml = unassigned.length ? `
+    <div class="hint" style="margin-bottom:4px;">👆 Cliquez sur un élève puis sur un second pour former un binôme${pendingStudent?` — <b>${escHtml(pendingStudent.prenom||pendingStudent.nom)}</b> sélectionné(e), cliquez sur un autre élève (ou sur un groupe pour en faire un trio) :`:" :"}</div>
+    <div class="pool">
+      ${unassigned.map(s=>{
+        const sel = pending===s.id;
+        return `<button class="student-chip ${sel?"selected":""}" data-action="pick-student" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${s.id}">${escHtml(s.prenom||s.nom)}</button>`;
+      }).join("")}
+    </div>
+  ` : (c.students.length ? `<div class="hint">Tous les élèves présents sont assignés à un groupe.</div>` : "");
+
   const cards = se.groupes.map((g,gi)=>`
-    <div class="groupe-card">
-      <div class="gtitle">Groupe ${gi+1}</div>
+    <div class="groupe-card ${pendingStudent?"groupe-card-droppable":""}" ${pendingStudent?`data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"`:""}>
+      <div class="gtitle">Groupe ${gi+1}${pendingStudent?` — cliquer pour y ajouter ${escHtml(pendingStudent.prenom||pendingStudent.nom)}`:""}</div>
       ${g.memberIds.map(sid=>{
         const s = studentById(cls,sid);
         return `<span class="chip">${escHtml(s?( (s.prenom||s.nom) ):"?")}
           <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-student="${sid}">✕</button>
         </span>`;
       }).join("")}
-      ${unassigned.length? `<select data-action-select="add-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">
-        <option value="">+ ajouter un élève…</option>
-        ${unassigned.map(s=>`<option value="${s.id}">${escHtml(s.prenom||s.nom)}</option>`).join("")}
-      </select>` : ""}
       <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">supprimer groupe</button>
     </div>
   `).join("");
   return `
-    ${cards || "<div class=\"empty\">Aucun groupe — utilisez « Binômes au hasard » ou « Composer un groupe moi-même » ci-dessus.</div>"}
-    <div class="row" style="margin-top:6px;">
-      <button class="btn-small" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">+ ajouter un autre groupe vide</button>
-      ${unassigned.length? `<span class="hint">Non assignés : ${unassigned.map(s=>escHtml(s.prenom||s.nom)).join(", ")}</span>`:""}
-    </div>
+    ${poolHtml}
+    ${cards || "<div class=\"empty\">Aucun groupe pour l'instant — cliquez sur deux élèves ci-dessus, ou utilisez « Binômes au hasard ».</div>"}
   `;
 }
 
@@ -860,9 +892,43 @@ app.addEventListener("click", function(e){
     se.suivi.rows={}; se.etoile.rows={}; se.papillon.rows={}; se.scores.rows={};
     saveState(); renderApp(); return;
   }
-  if(action==="add-groupe"){ ensureSeance(cls,num).groupes.push({id:uid(), memberIds:[]}); saveState(); renderApp(); return; }
+  if(action==="toggle-presence"){
+    const se = ensureSeance(cls,num);
+    if(!se.presence[sid]) se.presence[sid] = {absent:false, dispense:false};
+    const p = se.presence[sid];
+    if(!p.absent && !p.dispense){ p.absent=true; }
+    else if(p.absent){ p.absent=false; p.dispense=true; }
+    else { p.dispense=false; }
+    saveState(); renderApp();
+    return;
+  }
   if(action==="delete-groupe"){ const se=ensureSeance(cls,num); se.groupes = se.groupes.filter(g=>g.id!==gid); saveState(); renderApp(); return; }
   if(action==="remove-from-groupe"){ const se=ensureSeance(cls,num); const g=se.groupes.find(g=>g.id===gid); if(g) g.memberIds=g.memberIds.filter(id=>id!==sid); saveState(); renderApp(); return; }
+  if(action==="pick-student"){
+    const key = cls+"_s"+num;
+    const prev = pendingSelection[key];
+    if(!prev){ pendingSelection[key] = sid; }
+    else if(prev===sid){ pendingSelection[key] = null; }
+    else{
+      const se = ensureSeance(cls,num);
+      se.groupes.push({id:uid(), memberIds:[prev, sid]});
+      pendingSelection[key] = null;
+      saveState();
+    }
+    renderApp();
+    return;
+  }
+  if(action==="add-pending-to-groupe"){
+    const key = cls+"_s"+num;
+    const pending = pendingSelection[key];
+    if(!pending) return;
+    const se = ensureSeance(cls,num);
+    const g = se.groupes.find(g=>g.id===gid);
+    if(g && !g.memberIds.includes(pending)) g.memberIds.push(pending);
+    pendingSelection[key] = null;
+    saveState(); renderApp();
+    return;
+  }
 
   if(action==="etoile-depart"){ setRow("etoile",cls,num,gid,r=>{r.depart=Date.now();}); return; }
   if(action==="toggle-balise"){
@@ -980,15 +1046,6 @@ app.addEventListener("change", function(e){
   if(el.dataset.path){
     const val = el.dataset.bool ? el.checked : el.value;
     setPath(state, el.dataset.path, val);
-    saveState(); renderApp();
-    return;
-  }
-  if(el.dataset.actionSelect==="add-to-groupe"){
-    const cls = el.dataset.class, num = el.dataset.seance, gid = el.dataset.groupe, sid = el.value;
-    if(!sid) return;
-    const se = ensureSeance(cls,num);
-    const g = se.groupes.find(g=>g.id===gid);
-    if(g) g.memberIds.push(sid);
     saveState(); renderApp();
     return;
   }
