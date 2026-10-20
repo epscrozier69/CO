@@ -142,6 +142,8 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 .classe-picker{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
 .classe-picker button{padding:14px 22px;font-size:15px;border-radius:10px;}
 .img-card img{cursor:zoom-in;}
+.pdf-thumb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;background:#fdeceb;border:2px dashed #d3332c66;border-radius:8px;font-size:40px;color:#9c1f1a;text-decoration:none;}
+.pdf-thumb span{font-size:12px;font-weight:700;}
 .lightbox{position:fixed;inset:0;background:rgba(10,15,25,.92);z-index:1000;display:flex;align-items:center;justify-content:center;padding:30px;cursor:zoom-out;}
 .lightbox img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6);}
 .lightbox .lb-close{position:fixed;top:16px;right:20px;background:#fff2;color:#fff;border:1px solid #fff5;border-radius:50%;width:38px;height:38px;font-size:18px;line-height:1;}
@@ -288,7 +290,23 @@ function idbGetAll(){
     tx.onerror = ()=>reject(tx.error);
   }));
 }
+function isPdfDataUrl(dataUrl){ return !!dataUrl && dataUrl.indexOf("data:application/pdf")===0; }
+function docThumbHtml(imgId){
+  const data = imageCache[imgId];
+  if(!data) return `<div class="empty">Chargement du fichier…</div>`;
+  if(isPdfDataUrl(data)) return `<a href="${data}" target="_blank" rel="noopener" class="pdf-thumb" title="Ouvrir le PDF dans un nouvel onglet">📄<span>Ouvrir le PDF</span></a>`;
+  return `<img src="${data}" data-action="open-lightbox" title="Cliquer pour agrandir">`;
+}
+function readFileAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 function resizeImageFile(file, maxDim, quality){
+  if(file.type==="application/pdf" || /\.pdf$/i.test(file.name||"")) return readFileAsDataURL(file);
   return new Promise((resolve,reject)=>{
     const reader = new FileReader();
     reader.onload = ()=>{
@@ -984,17 +1002,17 @@ function renderBaremePanel(){
   const b = ensureBaremeSeance(num);
   const imgs = b.images||[];
   const body = `
-    <h2 class="ptitle">📐 Barème (photo) — Séance ${num}</h2>
+    <h2 class="ptitle">📐 Barème (photo ou PDF) — Séance ${num}</h2>
     <p class="hint">Ce barème est commun à toutes les classes pour cette séance.</p>
-    <label class="btn" style="display:inline-block;">📷 Ajouter une photo du barème
-      <input type="file" accept="image/*" data-action="upload-image" data-target="bareme-global" data-seance="${num}" style="display:none;">
+    <label class="btn" style="display:inline-block;">📷 Ajouter une photo ou un PDF du barème
+      <input type="file" accept="image/*,.pdf,application/pdf" data-action="upload-image" data-target="bareme-global" data-seance="${num}" style="display:none;">
     </label>
     <div class="img-grid" style="margin-top:10px;">
       ${imgs.map((imgId,i)=>`
-        <div class="img-card">${imageCache[imgId] ? `<img src="${imageCache[imgId]}" data-action="open-lightbox" title="Cliquer pour agrandir">` : `<div class="empty">Chargement de l'image…</div>`}
+        <div class="img-card">${docThumbHtml(imgId)}
           <div class="cap"><span>Barème ${i+1}</span>
           <button class="btn-xs btn-danger" data-action="delete-image" data-target="bareme-global" data-seance="${num}" data-index="${i}">✕</button></div>
-        </div>`).join("") || "<div class=\"empty\">Aucune photo de barème ajoutée.</div>"}
+        </div>`).join("") || "<div class=\"empty\">Aucune photo/PDF de barème ajouté.</div>"}
     </div>
   `;
   return tabBar(subTabs, active, "set-bareme-tab", "", 2) + `<div class="tabpanel" style="box-shadow:none;">${body}</div>`;
@@ -1168,12 +1186,12 @@ function renderCartesPanel(){
   const imgs = state.cartes||[];
   return `
     <h2 class="ptitle">🗺️ Cartes du parc</h2>
-    <label class="btn" style="display:inline-block;">📷 Ajouter une carte
-      <input type="file" accept="image/*" data-action="upload-image" data-target="cartes" style="display:none;">
+    <label class="btn" style="display:inline-block;">📷 Ajouter une carte (image ou PDF)
+      <input type="file" accept="image/*,.pdf,application/pdf" data-action="upload-image" data-target="cartes" style="display:none;">
     </label>
     <div class="img-grid" style="margin-top:10px;">
       ${imgs.map((it,i)=>`
-        <div class="img-card">${imageCache[it.imgId] ? `<img src="${imageCache[it.imgId]}" data-action="open-lightbox" title="Cliquer pour agrandir">` : `<div class="empty">Chargement de l'image…</div>`}
+        <div class="img-card">${docThumbHtml(it.imgId)}
           <div class="cap"><input class="inline-text" style="width:70%;" type="text" value="${escAttr(it.label)}" data-path="cartes.${i}.label">
           <button class="btn-xs btn-danger" data-action="delete-image" data-target="cartes" data-index="${i}">✕</button></div>
         </div>`).join("") || "<div class=\"empty\">Aucune carte ajoutée.</div>"}
