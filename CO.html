@@ -1143,7 +1143,7 @@ function renderCartesPanel(){
 /* ===================== ACTIONS ===================== */
 const app = document.getElementById("app");
 
-app.addEventListener("click", function(e){
+document.addEventListener("click", function(e){
   const t = e.target.closest("[data-action]");
   if(!t) return;
   const action = t.dataset.action;
@@ -1436,7 +1436,7 @@ function setRow(situ, cls, num, gid, mutate){
   saveState(); renderApp();
 }
 
-app.addEventListener("change", function(e){
+document.addEventListener("change", function(e){
   const el = e.target;
 
   if(el.dataset.path){
