@@ -126,7 +126,7 @@ table.co tbody tr:hover{background:#eef5ff;}
 .presence-grid{display:flex;flex-wrap:wrap;gap:6px;}
 .presence-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:2px solid var(--line);background:#fff;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink);}
 .presence-chip:hover{filter:brightness(0.97);}
-.presence-chip.presence-ok{border-color:#1f9d55;background:#eafaf0;color:#0f6b36;}
+.presence-chip.presence-ok{border-color:#2563eb;background:#eaf1fd;color:#1a4fc4;}
 .presence-chip.presence-abs{border-color:#d3332c;background:#fdeceb;color:#9c1f1a;text-decoration:line-through;}
 .presence-chip.presence-disp{border-color:#6d4fc2;background:#f1edfb;color:#4a3494;text-decoration:line-through;}
 .presence-chip .pc-icon{font-size:13px;}
@@ -598,6 +598,19 @@ function renderPresence(cls, num){
 /* ---------- Séance ---------- */
 const SITUATIONS_BY_SEANCE = { 1:["suivi","etoile"], 2:["etoile","papillon"], 3:["papillon","scores"] };
 const ETOILE_BALISES = {1:5, 2:10};
+/* Répartition des balises Parcours Étoile séance 2 (document fourni par l'enseignant) :
+   chaque groupe reçoit cette séquence de 10 balises, décalée d'un cran par rapport au groupe précédent. */
+const ETOILE_BALISE_ORDER_S2 = [59,53,47,60,11,50,41,39,36,40];
+function applyEtoileRotation(se, num){
+  if(num!==2 || !se.groupes.length) return;
+  const order = ETOILE_BALISE_ORDER_S2, n = order.length;
+  se.groupes.forEach((g,i)=>{
+    const shift = i%n;
+    const rot = order.slice(shift).concat(order.slice(0,shift));
+    if(!se.etoile.rows[g.id]) se.etoile.rows[g.id] = {depart:null, balises:Array.from({length:n},()=>({status:"none",time:null})), prevu:"", note:""};
+    se.etoile.rows[g.id].prevu = rot.join(",");
+  });
+}
 const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", bareme:"📐 Barème" };
 
 function renderSeancePanel(cls, num){
@@ -612,6 +625,7 @@ function renderSeancePanel(cls, num){
       <div class="field"><label>Date de la séance</label>
         <input type="date" data-path="classes.${escAttr(cls)}.seances.s${num}.date" value="${escAttr(se.date)}">
       </div>
+      <button class="btn-danger" data-action="delete-seance" data-class="${escAttr(cls)}" data-seance="${num}">🗑️ Supprimer cette séance</button>
     </div>
     ${renderPresence(cls, num)}
     <h2 class="ptitle" style="margin-top:16px;">🤝 Groupes / binômes</h2>
@@ -698,6 +712,11 @@ function renderBaremeBody(cls, num){
 
 /* ===================== SITUATIONS ===================== */
 /* ---- Suivi parcours (séance 1) ---- */
+function resetSituationBtn(cls, num, situ){
+  return `<div class="row" style="justify-content:flex-end;margin-bottom:6px;">
+    <button class="btn-small btn-danger" data-action="reset-situation" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}">🔄 Réinitialiser cette situation</button>
+  </div>`;
+}
 function renderSuivi(cls, num){
   const se = ensureSeance(cls,num);
   if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
@@ -718,7 +737,7 @@ function renderSuivi(cls, num){
       <td class="left"><input class="inline-text" type="text" value="${escAttr(r.obs)}" data-path="classes.${escAttr(cls)}.seances.s${num}.suivi.rows.${g.id}.obs"></td>
     </tr>`;
   }).join("");
-  return `<div class="table-wrap"><table class="co">
+  return resetSituationBtn(cls,num,"suivi") + `<div class="table-wrap"><table class="co">
     <thead><tr>
       <th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th>
       <th class="col-c7">Retour</th><th class="col-c5">Temps total</th><th class="col-c2 left">Observations</th>
@@ -761,7 +780,7 @@ function renderEtoile(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return `<p class="hint">Cliquez sur une balise pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
+  return resetSituationBtn(cls,num,"etoile") + `<p class="hint">Cliquez sur une balise pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
   ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min." : ""} La « note suggérée » est pré-remplie, modifiez-la selon le barème (photo).</p>
   <div class="table-wrap"><table class="co">
     <thead><tr>
@@ -801,7 +820,7 @@ function renderPapillon(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:totalPoints)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return `<p class="hint">30 min maximum. Cliquez sur chaque balise du parcours pour choisir son résultat (—, balise Rouge = 10 pts, balise Verte = 5 pts, Ratée). Cliquez ensuite sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
+  return resetSituationBtn(cls,num,"papillon") + `<p class="hint">30 min maximum. Cliquez sur chaque balise du parcours pour choisir son résultat (—, balise Rouge = 10 pts, balise Verte = 5 pts, Ratée). Cliquez ensuite sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Parcours 1 (3 balises)</th><th class="col-c2 left">Parcours 2 (3 balises)</th><th class="col-c5">Points</th><th class="col-c7">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -830,7 +849,7 @@ function renderScores(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!=null?r.note:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return `<p class="hint">Chaque équipe cherche librement un maximum de balises dans le temps imparti. Ajoutez chaque balise trouvée avec son code et le nombre de points qu'elle rapporte.</p>
+  return resetSituationBtn(cls,num,"scores") + `<p class="hint">Chaque équipe cherche librement un maximum de balises dans le temps imparti. Ajoutez chaque balise trouvée avec son code et le nombre de points qu'elle rapporte.</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th><th class="col-c7">Fin</th><th class="col-c5">Score</th><th class="col-c6">Temps total</th><th class="col-c8">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -890,6 +909,7 @@ app.addEventListener("click", function(e){
     if(n===1) groupes.push({id:uid(), memberIds:[arr[0].id]});
     se.groupes = groupes;
     se.suivi.rows={}; se.etoile.rows={}; se.papillon.rows={}; se.scores.rows={};
+    applyEtoileRotation(se, Number(num));
     saveState(); renderApp(); return;
   }
   if(action==="toggle-presence"){
@@ -902,7 +922,29 @@ app.addEventListener("click", function(e){
     saveState(); renderApp();
     return;
   }
-  if(action==="delete-groupe"){ const se=ensureSeance(cls,num); se.groupes = se.groupes.filter(g=>g.id!==gid); saveState(); renderApp(); return; }
+  if(action==="delete-seance"){
+    if(!confirm("Supprimer toutes les données de la Séance "+num+" (date, présence, groupes, parcours, barème) ? Action irréversible.")) return;
+    const c = ensureClass(cls);
+    const se = c.seances && c.seances["s"+num];
+    if(se && se.bareme && se.bareme.images){
+      se.bareme.images.forEach(id=>{ delete imageCache[id]; idbDelete(id).catch(()=>{}); });
+    }
+    if(c.seances) delete c.seances["s"+num];
+    delete pendingSelection[cls+"_s"+num];
+    delete uiState.seanceTab[cls+"_s"+num];
+    saveState(); saveUI(); renderApp();
+    return;
+  }
+  if(action==="reset-situation"){
+    const situ = t.dataset.situ;
+    const labels = {suivi:"Suivi parcours", etoile:"Parcours Étoile", papillon:"Parcours Papillon", scores:"Course aux scores"};
+    if(!confirm("Réinitialiser « "+(labels[situ]||situ)+" » (départs, temps, balises, notes) ? Les groupes restent inchangés. Action irréversible.")) return;
+    const se = ensureSeance(cls,num);
+    se[situ].rows = {};
+    saveState(); renderApp();
+    return;
+  }
+  if(action==="delete-groupe"){ const se=ensureSeance(cls,num); se.groupes = se.groupes.filter(g=>g.id!==gid); applyEtoileRotation(se, Number(num)); saveState(); renderApp(); return; }
   if(action==="remove-from-groupe"){ const se=ensureSeance(cls,num); const g=se.groupes.find(g=>g.id===gid); if(g) g.memberIds=g.memberIds.filter(id=>id!==sid); saveState(); renderApp(); return; }
   if(action==="pick-student"){
     const key = cls+"_s"+num;
@@ -912,6 +954,7 @@ app.addEventListener("click", function(e){
     else{
       const se = ensureSeance(cls,num);
       se.groupes.push({id:uid(), memberIds:[prev, sid]});
+      applyEtoileRotation(se, Number(num));
       pendingSelection[key] = null;
       saveState();
     }
