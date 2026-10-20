@@ -112,6 +112,7 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .cell-btn.verte{background:#dff3e6;border-color:#1f9d55;color:#116b36;}
 .cell-btn.rate{background:#eceff2;border-color:#9aa6b3;color:#6b7684;text-decoration:line-through;}
 .cell-btn.partial{background:#fdf0e0;border-color:#e08c00;color:#8a5600;}
+.sens-btn{font-size:26px;font-weight:900;min-width:44px;padding:6px 10px;}
 .time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
 .time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
 .chip{display:inline-flex;align-items:center;gap:5px;background:#eef2f6;border-radius:20px;padding:3px 9px;font-size:11.5px;margin:2px;}
@@ -557,12 +558,13 @@ function ensureSeance(cls, num){
   if(!c.seances) c.seances = {};
   const key = "s"+num;
   if(!c.seances[key]) c.seances[key] = {
-    date:"", groupesBySitu:{}, presence:{},
+    date:"", groupesBySitu:{}, presence:{}, comportement:{},
     suivi:{rows:{}}, etoile:{rows:{}}, papillon:{rows:{}}, scores:{rows:{}},
     bareme:{images:[]}
   };
   const se = c.seances[key];
   if(!se.presence) se.presence = {};
+  if(!se.comportement) se.comportement = {};
   if(!se.groupesBySitu){
     se.groupesBySitu = {};
     if(Array.isArray(se.groupes)){
@@ -593,6 +595,12 @@ function isPresent(se, studentId){
 function studentById(cls, id){
   const c = state.classes[cls]; if(!c) return null;
   return (c.students||[]).find(s=>s.id===id) || null;
+}
+function sortMemberIdsByRoster(cls, memberIds){
+  const roster = (state.classes[cls] && state.classes[cls].students) || [];
+  const order = {};
+  roster.forEach((s,i)=>{ order[s.id]=i; });
+  return [...memberIds].sort((a,b)=>(order[a]!=null?order[a]:9999)-(order[b]!=null?order[b]:9999));
 }
 function groupLabel(cls, groupe){
   return groupe.memberIds.map(id=>{
@@ -887,7 +895,25 @@ function applyEtoileRotation(se, num){
     });
   }
 }
-const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores" };
+function ensurePapillonRow(se, gid){
+  if(!se.papillon.rows[gid]) se.papillon.rows[gid] = defaultRowFor("papillon", 2);
+  return se.papillon.rows[gid];
+}
+function applyPapillonRotation(se, num){
+  /* Répartition séance 2 (document fourni) : le groupe i fait le Parcours i puis le Parcours (13-i).
+     Ne remplit que les parcours vides, ne remplace jamais une assignation déjà faite. */
+  const groupes = se.groupesBySitu.papillon || [];
+  if(num!==2 || !groupes.length) return;
+  const n = 12;
+  groupes.forEach((g,i)=>{
+    const row = ensurePapillonRow(se, g.id);
+    const p1num = (i%n)+1;
+    const p2num = n-(i%n);
+    if(row.p1.parcoursNum==null) row.p1.parcoursNum = p1num;
+    if(row.p2.parcoursNum==null) row.p2.parcoursNum = p2num;
+  });
+}
+const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", recap:"📊 Récap" };
 const SA_LABELS = {
   1: {suivi:"SA2", etoile:"SA3"},
   2: {etoile:"SA1", papillon:"SA2"},
@@ -896,7 +922,7 @@ const SA_LABELS = {
 
 function renderSeancePanel(cls, num){
   const se = ensureSeance(cls, num);
-  const situs = SITUATIONS_BY_SEANCE[num];
+  const situs = SITUATIONS_BY_SEANCE[num].concat(["recap"]);
   const seKey = cls+"_s"+num;
   let active = uiState.seanceTab[seKey] || situs[0];
   if(!situs.includes(active)){ active = situs[0]; uiState.seanceTab[seKey] = active; }
@@ -923,7 +949,49 @@ function renderSituationBody(cls, num, type){
   if(type==="etoile") return renderEtoile(cls,num);
   if(type==="papillon") return renderPapillon(cls,num);
   if(type==="scores") return renderScores(cls,num);
+  if(type==="recap") return renderRecap(cls,num);
   return "";
+}
+function studentNoteForSitu(se, situ, studentId){
+  const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
+  const g = groupes.find(gr=>gr.memberIds.includes(studentId));
+  if(!g) return "";
+  const row = se[situ] && se[situ].rows && se[situ].rows[g.id];
+  return (row && row.note!=null && row.note!=="") ? row.note : "";
+}
+function renderRecap(cls, num){
+  const se = ensureSeance(cls, num);
+  const c = state.classes[cls];
+  const situs = SITUATIONS_BY_SEANCE[num];
+  const students = [...c.students].sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
+  const situHeaders = situs.map((situ,i)=>`<th class="col-c${(i+1)%PALETTE_COUNT}">${SITU_LABEL[situ]}</th>`).join("");
+  const rows = students.map(s=>{
+    const cells = situs.map(situ=>{
+      const note = studentNoteForSitu(se, situ, s.id);
+      return `<td><b>${escHtml(note!==""&&note!=null?String(note):"—")}</b></td>`;
+    }).join("");
+    const comport = se.comportement[s.id] || "";
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
+      <td class="left">${escHtml(s.prenom)}</td>
+      ${cells}
+      <td><select data-action-select="set-comportement" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${s.id}">
+        <option value="" ${!comport?"selected":""}>—</option>
+        <option value="TB" ${comport==="TB"?"selected":""}>TB</option>
+        <option value="S" ${comport==="S"?"selected":""}>S</option>
+        <option value="F" ${comport==="F"?"selected":""}>F</option>
+        <option value="I" ${comport==="I"?"selected":""}>I</option>
+      </select></td>
+    </tr>`;
+  }).join("");
+  return `
+    <h2 class="ptitle">📊 Récapitulatif — Séance ${num}</h2>
+    <p class="hint">Élèves par ordre alphabétique, notes obtenues pour chaque situation de cette séance, et comportement à saisir manuellement.</p>
+    <div class="table-wrap"><table class="co">
+      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c8 left">Prénom</th>${situHeaders}<th class="col-c6">Comportement</th></tr></thead>
+      <tbody>${rows || "<tr><td colspan=\""+(3+situs.length)+"\" class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+    </table></div>
+  `;
 }
 
 let pendingSelection = {};
@@ -970,15 +1038,15 @@ function renderGroupesPool(cls, num, situ){
 function groupeCellHtml(cls, num, situ, g, gi){
   const pending = pendingSelection[pendingKey(cls,num,situ)];
   const clickAttr = pending ? `data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}"` : "";
-  return `<div ${clickAttr} style="${pending?"cursor:pointer;":""}">
+  return `<div ${clickAttr} style="${pending?"cursor:pointer;":""}display:flex;align-items:center;gap:4px;">
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
-    <div>${g.memberIds.map(sid=>{
+    <div>${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
       return `<span class="chip" style="background:#ffffffb0;color:inherit;">${escHtml(s?(s.prenom||s.nom):"?")}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
-    <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" style="margin-top:3px;">supprimer groupe</button>
+    <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" title="Supprimer ce groupe" style="border-radius:50%;width:20px;height:20px;padding:0;line-height:1;flex-shrink:0;">🗑</button>
   </div>`;
 }
 const ROW_COLORS = [
@@ -1053,12 +1121,12 @@ function renderSuivi(cls, num){
   const nb = SUIVI_BALISE_CODES.length;
   const headerBalises = SUIVI_BALISE_CODES.map((code,i)=>`<th class="col-c${(i+2)%PALETTE_COUNT}">${code}</th>`).join("");
   const rows = groupes.map((g,gi)=>{
-    const r = se.suivi.rows[g.id] || {sens:"", balises:Array.from({length:nb},()=>({status:"none"})), note:""};
+    const r = se.suivi.rows[g.id] || {sens: gi%2===0?"aller":"retour", balises:Array.from({length:nb},()=>({status:"none"})), note:""};
     if(!r.balises || r.balises.length!==nb){ r.balises = Array.from({length:nb},(_,i)=> r.balises&&r.balises[i] ? r.balises[i] : ({status:"none"})); }
     se.suivi.rows[g.id]=r;
     const justes = r.balises.filter(b=>b.status==="ok").length;
     const suggestedNote = gradeFromCount(justes, SUIVI_GRADE_BANDS);
-    const sensHtml = r.sens==="aller" ? "→" : (r.sens==="retour" ? "←" : "—");
+    const sensHtml = r.sens==="aller" ? "→" : (r.sens==="retour" ? "←" : (gi%2===0?"→":"←"));
     const balisesHtml = r.balises.map((b,bi)=>{
       const cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":(b.status==="partial"?"partial":""));
       const inner = b.status==="ok" ? "✔" : (b.status==="partial" ? "⚠" : (b.status==="ko" ? "✘" : "—"));
@@ -1067,7 +1135,7 @@ function renderSuivi(cls, num){
     return `<tr style="${rowColorStyle(gi)}">
       <td><b>${gi+1}</b></td>
       <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
-      <td><span class="cell-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Sens du parcours">${sensHtml}</span></td>
+      <td><span class="cell-btn sens-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer le sens">${sensHtml}</span></td>
       ${balisesHtml}
       <td><b>${justes}/${nb}</b></td>
       <td><input class="inline-text" style="width:50px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.suivi.rows.${g.id}.note"></td>
@@ -1145,9 +1213,10 @@ function renderPapillon(cls, num){
   const groupes = ensureGroupesSitu(se, situ);
   const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
   if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
+  applyPapillonRotation(se, Number(num));
   const emptyBalises = ()=>Array.from({length:3},()=>({state:"vide"}));
   const rows = groupes.map((g,gi)=>{
-    const r = se.papillon.rows[g.id] || {depart:null, p1:{balises:emptyBalises(), status:"none", time:null}, p2:{balises:emptyBalises(), status:"none", time:null}, note:""};
+    const r = se.papillon.rows[g.id] || {depart:null, p1:{parcoursNum:null, balises:emptyBalises(), status:"none", time:null}, p2:{parcoursNum:null, balises:emptyBalises(), status:"none", time:null}, note:""};
     se.papillon.rows[g.id]=r;
     const points = p=>p.balises.reduce((s,b)=> s + (b.state==="rouge"?10:(b.state==="verte"?5:0)),0);
     const totalPoints = points(r.p1)+points(r.p2);
@@ -1160,7 +1229,8 @@ function renderPapillon(cls, num){
       let statusLabel = p.status==="ok"?"✔ validé":(p.status==="ko"?"✘ invalide":"en cours");
       let statusCls = p.status==="ok"?"ok":(p.status==="ko"?"ko":"");
       let timeHtml = (p.status==="ok" && p.time && r.depart)? `<span class="time-tag green">${fmtElapsed(p.time-r.depart)}</span>` : "";
-      return `<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div>`;
+      const numLabel = p.parcoursNum!=null ? `<div style="font-weight:800;margin-bottom:2px;">N° ${p.parcoursNum}</div>` : "";
+      return `${numLabel}<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div>`;
     }
     return `<tr style="${rowColorStyle(gi)}">
       <td><b>${gi+1}</b></td>
@@ -1270,13 +1340,14 @@ document.addEventListener("click", function(e){
     for(let g=0;g<groupsCount;g++){
       const isLast = g===groupsCount-1;
       const size = (isLast && n%2===1) ? 3 : 2;
-      groupes.push({id:uid(), memberIds: arr.slice(idx, idx+size).map(s=>s.id)});
+      groupes.push({id:uid(), memberIds: sortMemberIdsByRoster(cls, arr.slice(idx, idx+size).map(s=>s.id))});
       idx+=size;
     }
     if(n===1) groupes.push({id:uid(), memberIds:[arr[0].id]});
     se.groupesBySitu[situ] = groupes;
     se[situ].rows = {};
     applyEtoileRotation(se, Number(num));
+    applyPapillonRotation(se, Number(num));
     syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
@@ -1332,6 +1403,7 @@ document.addEventListener("click", function(e){
     const se=ensureSeance(cls,num);
     se.groupesBySitu[situ] = ensureGroupesSitu(se,situ).filter(g=>g.id!==gid);
     applyEtoileRotation(se, Number(num));
+    applyPapillonRotation(se, Number(num));
     syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
@@ -1349,8 +1421,9 @@ document.addEventListener("click", function(e){
     else if(prev===sid){ pendingSelection[key] = null; }
     else{
       const se = ensureSeance(cls,num);
-      ensureGroupesSitu(se,situ).push({id:uid(), memberIds:[prev, sid]});
+      ensureGroupesSitu(se,situ).push({id:uid(), memberIds: sortMemberIdsByRoster(cls, [prev, sid])});
       applyEtoileRotation(se, Number(num));
+      applyPapillonRotation(se, Number(num));
       syncGroupesToNextSitu(se, Number(num), situ);
       pendingSelection[key] = null;
       saveState();
@@ -1364,7 +1437,7 @@ document.addEventListener("click", function(e){
     if(!pending) return;
     const se = ensureSeance(cls,num);
     const g = ensureGroupesSitu(se,situ).find(g=>g.id===gid);
-    if(g && !g.memberIds.includes(pending)) g.memberIds.push(pending);
+    if(g && !g.memberIds.includes(pending)) g.memberIds = sortMemberIdsByRoster(cls, g.memberIds.concat([pending]));
     syncGroupesToNextSitu(se, Number(num), situ);
     pendingSelection[key] = null;
     saveState(); renderApp();
@@ -1423,11 +1496,7 @@ document.addEventListener("click", function(e){
   }
 
   if(action==="toggle-sens"){
-    setRow("suivi",cls,num,gid,r=>{
-      if(!r.sens) r.sens="aller";
-      else if(r.sens==="aller") r.sens="retour";
-      else r.sens="";
-    });
+    setRow("suivi",cls,num,gid,r=>{ r.sens = (r.sens==="aller") ? "retour" : "aller"; });
     return;
   }
   if(action==="toggle-suivi-balise"){
@@ -1539,7 +1608,7 @@ function defaultRowFor(situ, num){
   const defaults = {
     suivi: ()=>({sens:"", balises:Array.from({length:SUIVI_BALISE_CODES.length},()=>({status:"none"})), note:""}),
     etoile: ()=>({depart:null, balises:Array.from({length:ETOILE_BALISES[num]||5},()=>({status:"none",time:null})), prevu:"", note:""}),
-    papillon: ()=>({depart:null, p1:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, p2:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, note:""}),
+    papillon: ()=>({depart:null, p1:{parcoursNum:null, balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, p2:{parcoursNum:null, balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, note:""}),
     scores: ()=>({depart:null, fin:null, found:[], note:""})
   };
   return defaults[situ]();
@@ -1557,6 +1626,13 @@ document.addEventListener("change", function(e){
   if(el.dataset.path){
     const val = el.dataset.bool ? el.checked : el.value;
     setPath(state, el.dataset.path, val);
+    saveState(); renderApp();
+    return;
+  }
+  if(el.dataset.actionSelect==="set-comportement"){
+    const cls = el.dataset.class, num = el.dataset.seance, sid = el.dataset.student;
+    const se = ensureSeance(cls,num);
+    se.comportement[sid] = el.value;
     saveState(); renderApp();
     return;
   }
