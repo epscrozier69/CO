@@ -337,12 +337,24 @@ function ensureSeance(cls, num){
   if(!c.seances) c.seances = {};
   const key = "s"+num;
   if(!c.seances[key]) c.seances[key] = {
-    date:"", groupes:[], presence:{},
+    date:"", groupesBySitu:{}, presence:{},
     suivi:{rows:{}}, etoile:{rows:{}}, papillon:{rows:{}}, scores:{rows:{}},
     bareme:{images:[]}
   };
-  if(!c.seances[key].presence) c.seances[key].presence = {};
-  return c.seances[key];
+  const se = c.seances[key];
+  if(!se.presence) se.presence = {};
+  if(!se.groupesBySitu){
+    se.groupesBySitu = {};
+    if(Array.isArray(se.groupes)){
+      ["suivi","etoile","papillon","scores"].forEach(s=>{ se.groupesBySitu[s] = se.groupes.map(g=>({id:g.id, memberIds:[...g.memberIds]})); });
+      delete se.groupes;
+    }
+  }
+  return se;
+}
+function ensureGroupesSitu(se, situ){
+  if(!se.groupesBySitu[situ]) se.groupesBySitu[situ] = [];
+  return se.groupesBySitu[situ];
 }
 function isPresent(se, studentId){
   const p = se.presence && se.presence[studentId];
@@ -601,15 +613,44 @@ const ETOILE_BALISES = {1:5, 2:10};
 /* Répartition des balises Parcours Étoile séance 2 (document fourni par l'enseignant) :
    chaque groupe reçoit cette séquence de 10 balises, décalée d'un cran par rapport au groupe précédent. */
 const ETOILE_BALISE_ORDER_S2 = [59,53,47,60,11,50,41,39,36,40];
+/* Répartition des balises Parcours Étoile séance 1 (document fourni par l'enseignant, 5 balises) :
+   deux rotations de 5 balises (groupes 1-5 puis 6-10), le cycle redémarre au groupe 11. */
+const ETOILE_GROUPS_SEQ_S1 = [
+  [50,44,45,47,70],
+  [44,45,47,70,50],
+  [45,47,70,50,44],
+  [47,70,50,44,45],
+  [70,50,44,45,47],
+  [48,46,59,49,70],
+  [46,59,49,70,48],
+  [59,49,70,48,46],
+  [49,70,48,46,59],
+  [70,48,46,59,49],
+  [50,44,45,47,70],
+  [44,45,47,70,50],
+  [45,47,70,50,44]
+];
+function ensureEtoileRow(se, gid, nb){
+  if(!se.etoile.rows[gid]) se.etoile.rows[gid] = {depart:null, balises:Array.from({length:nb},()=>({status:"none",time:null})), prevu:"", note:""};
+  return se.etoile.rows[gid];
+}
 function applyEtoileRotation(se, num){
-  if(num!==2 || !se.groupes.length) return;
-  const order = ETOILE_BALISE_ORDER_S2, n = order.length;
-  se.groupes.forEach((g,i)=>{
-    const shift = i%n;
-    const rot = order.slice(shift).concat(order.slice(0,shift));
-    if(!se.etoile.rows[g.id]) se.etoile.rows[g.id] = {depart:null, balises:Array.from({length:n},()=>({status:"none",time:null})), prevu:"", note:""};
-    se.etoile.rows[g.id].prevu = rot.join(",");
-  });
+  const groupes = se.groupesBySitu.etoile || [];
+  if(!groupes.length) return;
+  if(num===2){
+    const order = ETOILE_BALISE_ORDER_S2, n = order.length;
+    groupes.forEach((g,i)=>{
+      const shift = i%n;
+      const rot = order.slice(shift).concat(order.slice(0,shift));
+      ensureEtoileRow(se, g.id, n).prevu = rot.join(",");
+    });
+  } else if(num===1){
+    const n = ETOILE_GROUPS_SEQ_S1.length;
+    groupes.forEach((g,i)=>{
+      const seq = ETOILE_GROUPS_SEQ_S1[i % n];
+      ensureEtoileRow(se, g.id, 5).prevu = seq.join(",");
+    });
+  }
 }
 const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", bareme:"📐 Barème" };
 
@@ -628,12 +669,6 @@ function renderSeancePanel(cls, num){
       <button class="btn-danger" data-action="delete-seance" data-class="${escAttr(cls)}" data-seance="${num}">🗑️ Supprimer cette séance</button>
     </div>
     ${renderPresence(cls, num)}
-    <h2 class="ptitle" style="margin-top:16px;">🤝 Groupes / binômes</h2>
-    <div class="row">
-      <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}">🎲 Binômes au hasard (présents)</button>
-      <span class="hint">${se.groupes.length} groupe(s) constitué(s). Ou composez-les vous-même en cliquant sur les élèves ci-dessous.</span>
-    </div>
-    ${renderGroupes(cls, num)}
     <hr class="sep">
   `;
   const subTabs = situs.map(id=>({id, label:SITU_LABEL[id]}));
@@ -653,42 +688,57 @@ function renderSituationBody(cls, num, type){
 
 let pendingSelection = {};
 
-function renderGroupes(cls, num){
+function pendingKey(cls, num, situ){ return cls+"_s"+num+"_"+situ; }
+
+function renderGroupesSection(cls, num, situ){
+  const se = ensureSeance(cls, num);
+  const groupes = ensureGroupesSitu(se, situ);
+  return `
+    <h2 class="ptitle" style="margin-top:4px;">🤝 Groupes / binômes — ${SITU_LABEL[situ]}</h2>
+    <div class="row">
+      <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}">🎲 Binômes au hasard (présents)</button>
+      <span class="hint">${groupes.length} groupe(s) constitué(s) pour cette situation. Composez-les vous-même en cliquant sur deux élèves ci-dessous ; modifiez-les ensuite directement dans le tableau.</span>
+    </div>
+    ${renderGroupesPool(cls, num, situ)}
+  `;
+}
+
+function renderGroupesPool(cls, num, situ){
   const se = ensureSeance(cls,num);
+  const groupes = ensureGroupesSitu(se, situ);
   const c = state.classes[cls];
-  const assigned = new Set(se.groupes.flatMap(g=>g.memberIds));
+  const assigned = new Set(groupes.flatMap(g=>g.memberIds));
   const unassigned = c.students.filter(s=>isPresent(se,s.id) && !assigned.has(s.id));
-  const key = cls+"_s"+num;
+  const key = pendingKey(cls,num,situ);
   if(pendingSelection[key] && !unassigned.some(s=>s.id===pendingSelection[key])) pendingSelection[key] = null;
   const pending = pendingSelection[key];
   const pendingStudent = pending ? studentById(cls, pending) : null;
 
-  const poolHtml = unassigned.length ? `
-    <div class="hint" style="margin-bottom:4px;">👆 Cliquez sur un élève puis sur un second pour former un binôme${pendingStudent?` — <b>${escHtml(pendingStudent.prenom||pendingStudent.nom)}</b> sélectionné(e), cliquez sur un autre élève (ou sur un groupe pour en faire un trio) :`:" :"}</div>
+  if(!unassigned.length) return c.students.length ? `<div class="hint">Tous les élèves présents sont assignés à un groupe pour cette situation.</div>` : "";
+  return `
+    <div class="hint" style="margin-bottom:4px;">👆 Cliquez sur un élève puis sur un second pour former un binôme${pendingStudent?` — <b>${escHtml(pendingStudent.prenom||pendingStudent.nom)}</b> sélectionné(e), cliquez sur un autre élève (ou sur un groupe dans le tableau pour en faire un trio) :`:" :"}</div>
     <div class="pool">
       ${unassigned.map(s=>{
         const sel = pending===s.id;
-        return `<button class="student-chip ${sel?"selected":""}" data-action="pick-student" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${s.id}">${escHtml(s.prenom||s.nom)}</button>`;
+        return `<button class="student-chip ${sel?"selected":""}" data-action="pick-student" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-student="${s.id}">${escHtml(s.prenom||s.nom)}</button>`;
       }).join("")}
     </div>
-  ` : (c.students.length ? `<div class="hint">Tous les élèves présents sont assignés à un groupe.</div>` : "");
-
-  const cards = se.groupes.map((g,gi)=>`
-    <div class="groupe-card ${pendingStudent?"groupe-card-droppable":""}" ${pendingStudent?`data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"`:""}>
-      <div class="gtitle">Groupe ${gi+1}${pendingStudent?` — cliquer pour y ajouter ${escHtml(pendingStudent.prenom||pendingStudent.nom)}`:""}</div>
-      ${g.memberIds.map(sid=>{
-        const s = studentById(cls,sid);
-        return `<span class="chip">${escHtml(s?( (s.prenom||s.nom) ):"?")}
-          <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-student="${sid}">✕</button>
-        </span>`;
-      }).join("")}
-      <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">supprimer groupe</button>
-    </div>
-  `).join("");
-  return `
-    ${poolHtml}
-    ${cards || "<div class=\"empty\">Aucun groupe pour l'instant — cliquez sur deux élèves ci-dessus, ou utilisez « Binômes au hasard ».</div>"}
   `;
+}
+
+function groupeCellHtml(cls, num, situ, g, gi){
+  const pending = pendingSelection[pendingKey(cls,num,situ)];
+  const clickAttr = pending ? `data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}"` : "";
+  return `<div ${clickAttr} style="${pending?"cursor:pointer;":""}">
+    <div style="font-weight:800;">Groupe ${gi+1}${pending?" ➕":""}</div>
+    <div>${g.memberIds.map(sid=>{
+      const s = studentById(cls,sid);
+      return `<span class="chip" style="background:#ffffff30;color:#fff;">${escHtml(s?(s.prenom||s.nom):"?")}
+        <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
+      </span>`;
+    }).join("")}</div>
+    <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" style="margin-top:3px;">supprimer groupe</button>
+  </div>`;
 }
 
 /* ---------- Barème ---------- */
@@ -714,18 +764,22 @@ function renderBaremeBody(cls, num){
 /* ---- Suivi parcours (séance 1) ---- */
 function resetSituationBtn(cls, num, situ){
   return `<div class="row" style="justify-content:flex-end;margin-bottom:6px;">
+    <button class="btn-teal" data-action="depart-commun" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}">🏁 Départ commun (tous les groupes)</button>
     <button class="btn-small btn-danger" data-action="reset-situation" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}">🔄 Réinitialiser cette situation</button>
   </div>`;
 }
 function renderSuivi(cls, num){
   const se = ensureSeance(cls,num);
-  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
-  const rows = se.groupes.map((g)=>{
+  const situ = "suivi";
+  const groupes = ensureGroupesSitu(se, situ);
+  const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
+  if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
+  const rows = groupes.map((g,gi)=>{
     const r = se.suivi.rows[g.id] || {depart:null, log:[], retour:null, obs:""};
     se.suivi.rows[g.id]=r;
     const total = (r.depart && r.retour) ? fmtElapsed(r.retour-r.depart) : "";
     return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="suivi-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left" style="max-width:260px;white-space:normal;">
         ${r.log.map((l,li)=>`<span class="chip">${escHtml(l.code)} (${fmtClock(l.ts)})
@@ -737,7 +791,7 @@ function renderSuivi(cls, num){
       <td class="left"><input class="inline-text" type="text" value="${escAttr(r.obs)}" data-path="classes.${escAttr(cls)}.seances.s${num}.suivi.rows.${g.id}.obs"></td>
     </tr>`;
   }).join("");
-  return resetSituationBtn(cls,num,"suivi") + `<div class="table-wrap"><table class="co">
+  return top + `<div class="table-wrap"><table class="co">
     <thead><tr>
       <th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th>
       <th class="col-c7">Retour</th><th class="col-c5">Temps total</th><th class="col-c2 left">Observations</th>
@@ -747,14 +801,18 @@ function renderSuivi(cls, num){
 /* ---- Parcours Étoile (séance 1 : 5 balises / séance 2 : 10 balises) ---- */
 function renderEtoile(cls, num){
   const se = ensureSeance(cls,num);
+  const situ = "etoile";
+  const groupes = ensureGroupesSitu(se, situ);
   const nb = ETOILE_BALISES[num] || 5;
-  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
+  if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
   const maxTotalMs = num===2 ? 90*60*1000 : null;
   const headerBalises = Array.from({length:nb},(_,i)=>`<th class="col-c${(i+2)%PALETTE_COUNT}">B${i+1}</th>`).join("");
-  const rows = se.groupes.map(g=>{
+  const rows = groupes.map((g,gi)=>{
     const r = se.etoile.rows[g.id] || {depart:null, balises:Array.from({length:nb},()=>({status:"none",time:null})), prevu:"", note:""};
     if(!r.balises || r.balises.length!==nb){ r.balises = Array.from({length:nb},(_,i)=> r.balises&&r.balises[i] ? r.balises[i] : ({status:"none",time:null})); }
     se.etoile.rows[g.id]=r;
+    const prevuCodes = (r.prevu||"").split(",").map(s=>s.trim()).filter(Boolean);
     const nbTrouvees = r.balises.filter(b=>b.status==="ok").length;
     const okTimes = r.balises.filter(b=>b.status==="ok" && b.time).map(b=>b.time);
     const lastOk = okTimes.length? Math.max(...okTimes) : null;
@@ -762,17 +820,20 @@ function renderEtoile(cls, num){
     const totalColor = (totalMs!=null && maxTotalMs && totalMs>maxTotalMs) ? "red" : (totalMs!=null?"green":"");
     const suggestedNote = Math.round((nbTrouvees/nb)*20*10)/10;
     const balisesHtml = r.balises.map((b,bi)=>{
+      const code = prevuCodes[bi] || "";
       let cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":"");
-      let inner = b.status==="ok" ? "✔" : (b.status==="ko" ? "✘" : "—");
+      let inner = code || "—";
+      if(b.status==="ok") inner = "✔ "+(code||"");
+      else if(b.status==="ko") inner = "✘ "+(code||"");
       let timeTag = "";
       if(b.status==="ok" && b.time && r.depart){
         const dms = b.time-r.depart; timeTag = `<span class="time-tag ${delayClass(dms)}">${fmtElapsed(dms)}</span>`;
       }
-      return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span></td>`;
+      return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span><button class="btn-xs" style="display:block;margin:2px auto 0;" data-action="edit-balise-code" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}" title="Modifier le numéro de cette balise">✏️</button></td>`;
     }).join("");
     return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
-      <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: B2,B5,B9)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
+      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: 59,53,47)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="etoile-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       ${balisesHtml}
       <td><b>${nbTrouvees}/${nb}</b></td>
@@ -780,7 +841,7 @@ function renderEtoile(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return resetSituationBtn(cls,num,"etoile") + `<p class="hint">Cliquez sur une balise pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
+  return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
   ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min." : ""} La « note suggérée » est pré-remplie, modifiez-la selon le barème (photo).</p>
   <div class="table-wrap"><table class="co">
     <thead><tr>
@@ -793,9 +854,12 @@ function renderEtoile(cls, num){
 /* ---- Parcours Papillon (séance 2 et 3) ---- */
 function renderPapillon(cls, num){
   const se = ensureSeance(cls,num);
-  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const situ = "papillon";
+  const groupes = ensureGroupesSitu(se, situ);
+  const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
+  if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
   const emptyBalises = ()=>Array.from({length:3},()=>({state:"vide"}));
-  const rows = se.groupes.map(g=>{
+  const rows = groupes.map((g,gi)=>{
     const r = se.papillon.rows[g.id] || {depart:null, p1:{balises:emptyBalises(), status:"none", time:null}, p2:{balises:emptyBalises(), status:"none", time:null}, note:""};
     se.papillon.rows[g.id]=r;
     const points = p=>p.balises.reduce((s,b)=> s + (b.state==="rouge"?10:(b.state==="verte"?5:0)),0);
@@ -812,7 +876,7 @@ function renderPapillon(cls, num){
       return `<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div>`;
     }
     return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="papillon-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left">${parcoursCell(r.p1,1)}</td>
       <td class="left">${parcoursCell(r.p2,2)}</td>
@@ -820,7 +884,7 @@ function renderPapillon(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:totalPoints)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return resetSituationBtn(cls,num,"papillon") + `<p class="hint">30 min maximum. Cliquez sur chaque balise du parcours pour choisir son résultat (—, balise Rouge = 10 pts, balise Verte = 5 pts, Ratée). Cliquez ensuite sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
+  return top + `<p class="hint">30 min maximum. Cliquez sur chaque balise du parcours pour choisir son résultat (—, balise Rouge = 10 pts, balise Verte = 5 pts, Ratée). Cliquez ensuite sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Parcours 1 (3 balises)</th><th class="col-c2 left">Parcours 2 (3 balises)</th><th class="col-c5">Points</th><th class="col-c7">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -829,14 +893,17 @@ function renderPapillon(cls, num){
 /* ---- Course aux scores (séance 3) ---- */
 function renderScores(cls, num){
   const se = ensureSeance(cls,num);
-  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
-  const rows = se.groupes.map(g=>{
+  const situ = "scores";
+  const groupes = ensureGroupesSitu(se, situ);
+  const top = resetSituationBtn(cls,num,situ) + renderGroupesSection(cls,num,situ);
+  if(!groupes.length) return top + "<div class=\"empty\">Constituez d'abord les binômes pour cette situation (ci-dessus).</div>";
+  const rows = groupes.map((g,gi)=>{
     const r = se.scores.rows[g.id] || {depart:null, fin:null, found:[], note:""};
     se.scores.rows[g.id]=r;
     const total = r.found.reduce((s,f)=>s+(Number(f.points)||0),0);
     const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
     return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td class="left col-c0" style="color:#fff;">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="scores-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left" style="max-width:260px;white-space:normal;">
         ${r.found.map((f,fi)=>`<span class="chip">${escHtml(f.code)} (${f.points}pt)
@@ -849,7 +916,7 @@ function renderScores(cls, num){
       <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!=null?r.note:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return resetSituationBtn(cls,num,"scores") + `<p class="hint">Chaque équipe cherche librement un maximum de balises dans le temps imparti. Ajoutez chaque balise trouvée avec son code et le nombre de points qu'elle rapporte.</p>
+  return top + `<p class="hint">Chaque équipe cherche librement un maximum de balises dans le temps imparti. Ajoutez chaque balise trouvée avec son code et le nombre de points qu'elle rapporte.</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th><th class="col-c7">Fin</th><th class="col-c5">Score</th><th class="col-c6">Temps total</th><th class="col-c8">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -880,7 +947,7 @@ app.addEventListener("click", function(e){
   const t = e.target.closest("[data-action]");
   if(!t) return;
   const action = t.dataset.action;
-  const cls = t.dataset.class, num = t.dataset.seance, gid = t.dataset.groupe, sid = t.dataset.student;
+  const cls = t.dataset.class, num = t.dataset.seance, gid = t.dataset.groupe, sid = t.dataset.student, situ = t.dataset.situ;
 
   if(action==="open-lightbox"){ openLightbox(t.getAttribute("src")); return; }
   if(action==="close-lightbox"){ closeLightbox(); return; }
@@ -893,8 +960,8 @@ app.addEventListener("click", function(e){
 
   if(action==="build-groupes"){
     const se = ensureSeance(cls,num);
-    const hasData = Object.keys(se.suivi.rows).length || Object.keys(se.etoile.rows).length || Object.keys(se.papillon.rows).length || Object.keys(se.scores.rows).length;
-    if(hasData && !confirm("Regénérer les binômes va réinitialiser le suivi déjà saisi pour cette séance. Continuer ?")) return;
+    const hasData = Object.keys(se[situ].rows).length;
+    if(hasData && !confirm("Regénérer les binômes au hasard pour « "+(SITU_LABEL[situ]||situ)+" » va réinitialiser le suivi déjà saisi pour cette situation. Continuer ?")) return;
     const roster = state.classes[cls].students.filter(s=>isPresent(se,s.id));
     const arr = shuffleArray([...roster]);
     const n = arr.length, groupsCount = Math.floor(n/2);
@@ -907,8 +974,8 @@ app.addEventListener("click", function(e){
       idx+=size;
     }
     if(n===1) groupes.push({id:uid(), memberIds:[arr[0].id]});
-    se.groupes = groupes;
-    se.suivi.rows={}; se.etoile.rows={}; se.papillon.rows={}; se.scores.rows={};
+    se.groupesBySitu[situ] = groupes;
+    se[situ].rows = {};
     applyEtoileRotation(se, Number(num));
     saveState(); renderApp(); return;
   }
@@ -930,7 +997,8 @@ app.addEventListener("click", function(e){
       se.bareme.images.forEach(id=>{ delete imageCache[id]; idbDelete(id).catch(()=>{}); });
     }
     if(c.seances) delete c.seances["s"+num];
-    delete pendingSelection[cls+"_s"+num];
+    const prefix = cls+"_s"+num+"_";
+    Object.keys(pendingSelection).forEach(k=>{ if(k.indexOf(prefix)===0) delete pendingSelection[k]; });
     delete uiState.seanceTab[cls+"_s"+num];
     saveState(); saveUI(); renderApp();
     return;
@@ -944,16 +1012,41 @@ app.addEventListener("click", function(e){
     saveState(); renderApp();
     return;
   }
-  if(action==="delete-groupe"){ const se=ensureSeance(cls,num); se.groupes = se.groupes.filter(g=>g.id!==gid); applyEtoileRotation(se, Number(num)); saveState(); renderApp(); return; }
-  if(action==="remove-from-groupe"){ const se=ensureSeance(cls,num); const g=se.groupes.find(g=>g.id===gid); if(g) g.memberIds=g.memberIds.filter(id=>id!==sid); saveState(); renderApp(); return; }
+  if(action==="depart-commun"){
+    const situ = t.dataset.situ;
+    const se = ensureSeance(cls,num);
+    const groupes = ensureGroupesSitu(se, situ);
+    if(!groupes.length) return;
+    const hasExisting = groupes.some(g=> se[situ].rows[g.id] && se[situ].rows[g.id].depart);
+    if(hasExisting && !confirm("Certains groupes ont déjà un départ enregistré. Le remplacer par un départ commun maintenant pour tous les groupes ?")) return;
+    const now = Date.now();
+    groupes.forEach(g=>{
+      if(!se[situ].rows[g.id]) se[situ].rows[g.id] = defaultRowFor(situ, num);
+      se[situ].rows[g.id].depart = now;
+    });
+    saveState(); renderApp();
+    return;
+  }
+  if(action==="delete-groupe"){
+    const se=ensureSeance(cls,num);
+    se.groupesBySitu[situ] = ensureGroupesSitu(se,situ).filter(g=>g.id!==gid);
+    applyEtoileRotation(se, Number(num));
+    saveState(); renderApp(); return;
+  }
+  if(action==="remove-from-groupe"){
+    const se=ensureSeance(cls,num);
+    const g=ensureGroupesSitu(se,situ).find(g=>g.id===gid);
+    if(g) g.memberIds=g.memberIds.filter(id=>id!==sid);
+    saveState(); renderApp(); return;
+  }
   if(action==="pick-student"){
-    const key = cls+"_s"+num;
+    const key = pendingKey(cls,num,situ);
     const prev = pendingSelection[key];
     if(!prev){ pendingSelection[key] = sid; }
     else if(prev===sid){ pendingSelection[key] = null; }
     else{
       const se = ensureSeance(cls,num);
-      se.groupes.push({id:uid(), memberIds:[prev, sid]});
+      ensureGroupesSitu(se,situ).push({id:uid(), memberIds:[prev, sid]});
       applyEtoileRotation(se, Number(num));
       pendingSelection[key] = null;
       saveState();
@@ -962,11 +1055,11 @@ app.addEventListener("click", function(e){
     return;
   }
   if(action==="add-pending-to-groupe"){
-    const key = cls+"_s"+num;
+    const key = pendingKey(cls,num,situ);
     const pending = pendingSelection[key];
     if(!pending) return;
     const se = ensureSeance(cls,num);
-    const g = se.groupes.find(g=>g.id===gid);
+    const g = ensureGroupesSitu(se,situ).find(g=>g.id===gid);
     if(g && !g.memberIds.includes(pending)) g.memberIds.push(pending);
     pendingSelection[key] = null;
     saveState(); renderApp();
@@ -982,6 +1075,22 @@ app.addEventListener("click", function(e){
       if(b.status==="none"){ b.status="ok"; b.time=Date.now(); }
       else if(b.status==="ok"){ b.status="ko"; }
       else { b.status="none"; b.time=null; }
+    });
+    return;
+  }
+  if(action==="edit-balise-code"){
+    const bi = Number(t.dataset.index);
+    const se = ensureSeance(cls,num);
+    const r = se.etoile.rows[gid];
+    const codes = (r && r.prevu ? r.prevu : "").split(",").map(s=>s.trim());
+    while(codes.length<=bi) codes.push("");
+    const val = prompt("Numéro de la balise pour cette case :", codes[bi]||"");
+    if(val===null) return;
+    setRow("etoile",cls,num,gid,row=>{
+      const c2 = (row.prevu||"").split(",").map(s=>s.trim());
+      while(c2.length<=bi) c2.push("");
+      c2[bi] = val.trim();
+      row.prevu = c2.join(",");
     });
     return;
   }
@@ -1070,15 +1179,18 @@ function closeLightbox(){
 }
 document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeLightbox(); });
 
-function setRow(situ, cls, num, gid, mutate){
-  const se = ensureSeance(cls,num);
+function defaultRowFor(situ, num){
   const defaults = {
     suivi: ()=>({depart:null, log:[], retour:null, obs:""}),
     etoile: ()=>({depart:null, balises:Array.from({length:ETOILE_BALISES[num]||5},()=>({status:"none",time:null})), prevu:"", note:""}),
     papillon: ()=>({depart:null, p1:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, p2:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, note:""}),
     scores: ()=>({depart:null, fin:null, found:[], note:""})
   };
-  if(!se[situ].rows[gid]) se[situ].rows[gid] = defaults[situ]();
+  return defaults[situ]();
+}
+function setRow(situ, cls, num, gid, mutate){
+  const se = ensureSeance(cls,num);
+  if(!se[situ].rows[gid]) se[situ].rows[gid] = defaultRowFor(situ,num);
   mutate(se[situ].rows[gid]);
   saveState(); renderApp();
 }
