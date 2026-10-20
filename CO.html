@@ -194,10 +194,10 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
   <div class="modal-box">
     <h2>🔄 Synchronisation GitHub</h2>
     <p class="hint">Synchronise automatiquement les données (élèves, séances, cartes…) entre vos appareils via un dépôt GitHub. Le jeton reste uniquement stocké dans ce navigateur, jamais publié dans le code.</p>
-    <div class="field"><label>Jeton d'accès (fine-grained)</label><input type="password" id="syncToken" placeholder="github_pat_..." autocomplete="off"></div>
-    <div class="field"><label>Propriétaire du dépôt (compte GitHub)</label><input type="text" id="syncOwner" placeholder="ex: epscrozier69"></div>
-    <div class="field"><label>Nom du dépôt</label><input type="text" id="syncRepo" placeholder="ex: CO"></div>
-    <div class="field"><label>Branche</label><input type="text" id="syncBranch" placeholder="main" value="main"></div>
+    <div class="field"><label>Jeton d'accès (fine-grained)</label><input type="text" id="syncToken" placeholder="github_pat_..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-family:monospace;"></div>
+    <div class="field"><label>Propriétaire du dépôt (compte GitHub)</label><input type="text" id="syncOwner" placeholder="ex: epscrozier69" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label>Nom du dépôt</label><input type="text" id="syncRepo" placeholder="ex: CO" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label>Branche</label><input type="text" id="syncBranch" placeholder="main" value="main" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
     <div class="row" style="margin-top:14px;">
       <button class="btn-accent" data-action="save-sync-settings">💾 Enregistrer et synchroniser</button>
       <button class="btn" data-action="close-sync-settings">Fermer</button>
@@ -1374,7 +1374,10 @@ document.addEventListener("click", function(e){
     document.getElementById("syncModalStatus").textContent = "Connexion en cours…";
     syncOnLoad().then(function(){
       const errEl = document.getElementById("syncStatus");
-      document.getElementById("syncModalStatus").textContent = (errEl && errEl.classList.contains("error")) ? "Échec de connexion — vérifiez le jeton, le propriétaire et le dépôt." : "Synchronisation active et à jour.";
+      if(!errEl || !errEl.classList.contains("error")){
+        document.getElementById("syncModalStatus").textContent = "Synchronisation active et à jour.";
+      }
+      /* en cas d'erreur, le message détaillé a déjà été posé par updateSyncStatusUI() — on ne l'écrase pas */
     });
     return;
   }
