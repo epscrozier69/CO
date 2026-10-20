@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CO 4ème">
+<title>EPS Suivi course d'orientation 4ème</title>
+<style>
+:root{
+  --navy:#0f1b2d;
+  --navy2:#15243b;
+  --accent:#ff7a1a;
+  --accent2:#00c2a8;
+  --bg:#eef2f6;
+  --card:#ffffff;
+  --ink:#1b2430;
+  --muted:#6b7684;
+  --line:#dbe2ea;
+  --ok:#1f9d55;
+  --warn:#e08c00;
+  --ko:#d3332c;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;}
+::-webkit-scrollbar{height:10px;width:10px;}
+::-webkit-scrollbar-thumb{background:#b9c3cf;border-radius:6px;}
+
+/* ---------- header ---------- */
+header.top{
+  background:linear-gradient(120deg,var(--navy) 0%,var(--navy2) 60%,#1b3550 100%);
+  color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  position:sticky;top:0;z-index:60;box-shadow:0 2px 10px rgba(0,0,0,.25);
+}
+header.top h1{font-size:19px;margin:0;letter-spacing:.3px;}
+header.top h1 .dot{color:var(--accent);}
+header.top .sub{font-size:11px;color:#b9c6d6;margin-top:2px;}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.top-actions .clock{background:#0009;border-radius:8px;padding:6px 10px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent2);font-size:15px;}
+button, .btn{
+  cursor:pointer;border:none;border-radius:7px;padding:6px 11px;font-size:12.5px;font-weight:600;
+  background:#eef2f6;color:var(--ink);transition:.12s;white-space:nowrap;
+}
+button:hover{filter:brightness(0.96);}
+button:active{transform:translateY(1px);}
+.btn-accent{background:var(--accent);color:#fff;}
+.btn-teal{background:var(--accent2);color:#07332c;}
+.btn-navy{background:var(--navy2);color:#fff;}
+.btn-danger{background:#fde2e1;color:#9c1f1a;}
+.btn-ghost{background:transparent;color:#fff;border:1px solid #ffffff55;}
+.btn-small{padding:3px 8px;font-size:11px;}
+.btn-xs{padding:2px 6px;font-size:10.5px;border-radius:5px;}
+
+main#app{max-width:1600px;margin:14px auto 60px;padding:0 12px;}
+
+/* ---------- onglets horizontaux ---------- */
+.tabbar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:0;}
+.tabbar.lvl1{position:sticky;top:64px;z-index:40;background:var(--bg);padding:8px 0 0;border-bottom:3px solid var(--navy2);}
+.tabbtn{
+  background:#dde5ee;color:var(--navy2);border:1px solid var(--line);border-bottom:none;
+  border-radius:8px 8px 0 0;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer;
+}
+.tabbar.lvl1 .tabbtn.active:not(.class-tab){background:var(--navy2);color:#fff;}
+.tabbar.lvl1 .tabbtn.class-tab{color:#fff;}
+.tabbar.lvl1 .tabbtn.class-tab.active{box-shadow:inset 0 -4px 0 rgba(255,255,255,.9);filter:brightness(1.08);}
+.tabbar.lvl2{border-bottom:3px solid var(--accent2);margin-top:14px;}
+.tabbar.lvl2 .tabbtn{font-size:12.5px;padding:7px 14px;}
+.tabbar.lvl2 .tabbtn.active{background:var(--accent2);color:#07332c;}
+.tabbar.lvl3{border-bottom:3px solid var(--accent);margin-top:12px;}
+.tabbar.lvl3 .tabbtn{font-size:12px;padding:6px 12px;}
+.tabbar.lvl3 .tabbtn.active{background:var(--accent);color:#fff;}
+.tabpanel{background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(20,30,50,.06);}
+.tabbadge{background:#0002;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:5px;}
+
+.badge{display:inline-block;background:var(--navy2);color:#fff;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;}
+.badge.orange{background:var(--accent);}
+.badge.teal{background:var(--accent2);color:#07332c;}
+
+/* ---------- generic layout ---------- */
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:2px;font-weight:600;}
+.field input[type=text],.field input[type=date],.field input[type=number],.field select{
+  padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;min-width:120px;
+}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:monospace;font-size:12.5px;}
+hr.sep{border:none;border-top:1px dashed var(--line);margin:12px 0;}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.5;}
+.empty{color:var(--muted);font-style:italic;font-size:12.5px;padding:8px 0;}
+a{color:#1458a8;}
+h2.ptitle{font-size:16px;margin:0 0 10px;color:var(--navy2);}
+
+/* ---------- tables ---------- */
+.table-wrap{overflow-x:auto;max-width:100%;border-radius:8px;border:1px solid var(--line);}
+table.co{border-collapse:collapse;width:auto;}
+table.co th,table.co td{border:1px solid var(--line);padding:5px 9px;white-space:nowrap;font-size:12.5px;text-align:center;}
+table.co td.left,table.co th.left{text-align:left;}
+table.co thead th{color:#fff;font-weight:700;position:sticky;top:0;}
+table.co tbody tr:nth-child(even){background:#f8fafc;}
+table.co tbody tr:hover{background:#eef5ff;}
+.col-c0{background:#2563eb;} .col-c1{background:#7c3aed;} .col-c2{background:#db2777;}
+.col-c3{background:#ea580c;} .col-c4{background:#0891b2;} .col-c5{background:#d97706;}
+.col-c6{background:#dc2626;} .col-c7{background:#4f46e5;} .col-c8{background:#c026d3;}
+.col-c9{background:#475569;}
+
+/* status cells */
+.cell-btn{display:inline-block;min-width:46px;padding:5px 6px;border-radius:6px;cursor:pointer;font-weight:700;border:1px solid #cfd8e3;background:#f1f4f8;color:#44505f;}
+.cell-btn.ok{background:#e4f6ea;border-color:#1f9d55;color:#1f9d55;}
+.cell-btn.ko{background:#fde4e2;border-color:#d3332c;color:#d3332c;}
+.cell-btn.rouge{background:#fde4e2;border-color:#d3332c;color:#9c1f1a;}
+.cell-btn.verte{background:#dff3e6;border-color:#1f9d55;color:#116b36;}
+.cell-btn.rate{background:#eceff2;border-color:#9aa6b3;color:#6b7684;text-decoration:line-through;}
+.time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
+.time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
+.chip{display:inline-flex;align-items:center;gap:5px;background:#eef2f6;border-radius:20px;padding:3px 9px;font-size:11.5px;margin:2px;}
+.chip button{padding:0 4px;background:none;color:#9c1f1a;font-weight:900;font-size:12px;}
+.groupe-card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:#fbfcfe;}
+.groupe-card .gtitle{font-weight:700;font-size:12.5px;margin-bottom:4px;color:var(--navy2);}
+select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;}
+input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;width:90%;}
+.img-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.img-card{border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff;width:220px;}
+.img-card img{width:100%;border-radius:6px;display:block;}
+.img-card .cap{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11px;}
+.note-input{width:60px;padding:4px;border:1px solid var(--line);border-radius:6px;text-align:center;font-weight:700;}
+.footer-note{font-size:11px;color:var(--muted);text-align:center;margin:18px 0 40px;}
+.classe-picker{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.classe-picker button{padding:14px 22px;font-size:15px;border-radius:10px;}
+.img-card img{cursor:zoom-in;}
+.lightbox{position:fixed;inset:0;background:rgba(10,15,25,.92);z-index:1000;display:flex;align-items:center;justify-content:center;padding:30px;cursor:zoom-out;}
+.lightbox img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6);}
+.lightbox .lb-close{position:fixed;top:16px;right:20px;background:#fff2;color:#fff;border:1px solid #fff5;border-radius:50%;width:38px;height:38px;font-size:18px;line-height:1;}
+
+@media (max-width:900px){
+  body{font-size:13px;}
+  header.top h1{font-size:16px;}
+  table.co th,table.co td{padding:4px 6px;font-size:11.5px;}
+  .tabbar.lvl1{top:58px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>🧭 EPS <span class="dot">•</span> Suivi course d'orientation 4<sup>ème</sup></h1>
+    <div class="sub">Collège — suivi des séances, parcours et balises</div>
+  </div>
+  <div class="top-actions">
+    <div class="clock" id="liveClock">--:--:--</div>
+    <button class="btn-ghost" data-action="export-backup">💾 Exporter sauvegarde</button>
+    <label class="btn-ghost" style="display:inline-block;">📂 Importer sauvegarde
+      <input type="file" accept=".json" id="importBackupFile" style="display:none;">
+    </label>
+    <button class="btn-danger" data-action="reset-all">🗑️ Réinitialiser</button>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div id="lightbox" class="lightbox" style="display:none;" data-action="close-lightbox">
+  <button class="lb-close" data-action="close-lightbox">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="footer-note">Données stockées localement dans ce navigateur (hors connexion). Pensez à exporter une sauvegarde régulièrement.</div>
+
+<script>
+/* ===================== STATE ===================== */
+const STORAGE_KEY = "CO_app_data_v1";
+const UI_KEY = "CO_app_ui_v2";
+let state = loadState();
+let uiState = loadUI();
+
+function defaultState(){
+  return { classes:{}, cartes:[] };
+}
+function loadState(){
+  try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  return defaultState();
+}
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ alert("Attention : sauvegarde locale impossible (stockage plein). Exportez une sauvegarde JSON."); }
+}
+function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{} }; }
+function loadUI(){
+  try{ const raw = localStorage.getItem(UI_KEY); if(raw) return Object.assign(defaultUI(), JSON.parse(raw)); }catch(e){}
+  return defaultUI();
+}
+function saveUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify(uiState)); }catch(e){} }
+
+/* ===================== IMAGES (IndexedDB) =====================
+   Les photos (cartes, barèmes) ne sont plus stockées dans le JSON localStorage
+   (quota ~5-10 Mo très vite dépassé) mais dans IndexedDB (quota bien plus grand).
+   imageCache garde une copie en mémoire {id: dataURL} pour un rendu synchrone. */
+const IDB_NAME = "CO_images_db";
+const IDB_STORE = "images";
+let imageCache = {};
+let dbPromise = null;
+
+function idbOpen(){
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
+    if(!window.indexedDB){ reject(new Error("IndexedDB non supporté")); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+  return dbPromise;
+}
+function idbPut(id, dataURL){
+  return idbOpen().then(db=> new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,"readwrite");
+    tx.objectStore(IDB_STORE).put(dataURL, id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+function idbDelete(id){
+  return idbOpen().then(db=> new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,"readwrite");
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+function idbGetAll(){
+  return idbOpen().then(db=> new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,"readonly");
+    const store = tx.objectStore(IDB_STORE);
+    const keysReq = store.getAllKeys();
+    const valsReq = store.getAll();
+    tx.oncomplete = ()=>{
+      const map = {};
+      keysReq.result.forEach((k,i)=>{ map[k]=valsReq.result[i]; });
+      resolve(map);
+    };
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+function resizeImageFile(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w=img.width, h=img.height;
+        if(w>maxDim || h>maxDim){
+          if(w>=h){ h = Math.round(h*maxDim/w); w = maxDim; }
+          else { w = Math.round(w*maxDim/h); h = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width=w; canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function migrateLegacyImages(){
+  let changed = false;
+  const tasks = [];
+  (state.cartes||[]).forEach(it=>{
+    if(it.img && !it.imgId){
+      const id = uid();
+      imageCache[id] = it.img;
+      tasks.push(idbPut(id, it.img).catch(()=>{}));
+      it.imgId = id; delete it.img;
+      if(!it.id) it.id = uid();
+      changed = true;
+    }
+  });
+  Object.values(state.classes||{}).forEach(c=>{
+    Object.values(c.seances||{}).forEach(se=>{
+      if(se.bareme && Array.isArray(se.bareme.images)){
+        se.bareme.images = se.bareme.images.map(img=>{
+          if(typeof img === "string" && img.indexOf("data:")===0){
+            const id = uid();
+            imageCache[id] = img;
+            tasks.push(idbPut(id, img).catch(()=>{}));
+            changed = true;
+            return id;
+          }
+          return img;
+        });
+      }
+    });
+  });
+  return Promise.all(tasks).then(()=>{ if(changed) saveState(); });
+}
+
+function uid(){ return "id"+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function normalize(s){ return (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim(); }
+function escAttr(s){ return (s||"").toString().replace(/"/g,"&quot;"); }
+function escHtml(s){ return (s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function getPath(obj, path){ return path.split(".").reduce((o,k)=> (o==null?undefined:o[k]), obj); }
+function setPath(obj, path, value){
+  const keys = path.split("."); let o = obj;
+  for(let i=0;i<keys.length-1;i++){
+    const k = keys[i];
+    if(o[k]==null) o[k] = /^\d+$/.test(keys[i+1]) ? [] : {};
+    o = o[k];
+  }
+  o[keys[keys.length-1]] = value;
+}
+
+/* ===================== HELPERS DOMAINE ===================== */
+const CLASSES_COLLEGE = ["4e1","4e2","4e3","4e4"];
+
+function ensureClass(name){
+  if(!state.classes[name]) state.classes[name] = { students: [] };
+  return state.classes[name];
+}
+function ensureSeance(cls, num){
+  const c = ensureClass(cls);
+  if(!c.seances) c.seances = {};
+  const key = "s"+num;
+  if(!c.seances[key]) c.seances[key] = {
+    date:"", groupes:[],
+    suivi:{rows:{}}, etoile:{rows:{}}, papillon:{rows:{}}, scores:{rows:{}},
+    bareme:{images:[]}
+  };
+  return c.seances[key];
+}
+function studentById(cls, id){
+  const c = state.classes[cls]; if(!c) return null;
+  return (c.students||[]).find(s=>s.id===id) || null;
+}
+function groupLabel(cls, groupe){
+  return groupe.memberIds.map(id=>{
+    const s = studentById(cls,id);
+    return s ? (s.prenom? s.prenom : s.nom) : "?";
+  }).join(" & ");
+}
+function fmtClock(ts){
+  if(!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function fmtElapsed(ms){
+  if(ms==null || ms<0) return "";
+  const totalSec = Math.round(ms/1000);
+  const m = Math.floor(totalSec/60), s = totalSec%60;
+  return m+":" + String(s).padStart(2,"0");
+}
+function delayClass(ms){
+  const min = ms/60000;
+  if(min<=5) return "green";
+  if(min<=10) return "orange";
+  return "red";
+}
+function shuffleArray(arr){
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+const PALETTE_COUNT = 10;
+
+/* ===================== IMPORT ELEVES ===================== */
+function parseDelimited(text){
+  const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0);
+  if(!lines.length) return {headerCells:[], rows:[]};
+  const first = lines[0];
+  const delim = first.includes("\t") ? "\t" : (first.includes(";") ? ";" : ",");
+  const headerCells = lines[0].split(delim).map(h=>normalize(h));
+  const rows = lines.slice(1).map(l=>l.split(delim));
+  return {headerCells, rows};
+}
+const GSHEET_ID = "1vviZWjfSYNOAf-Ic9X0DeUp5-F1CWg3rDEBcP67PSuY";
+const GSHEET_GID = "0";
+function gsheetSetBtn(disabled, label){
+  const btn = document.getElementById("gsheetBtn");
+  if(btn){ btn.disabled = disabled; btn.textContent = label; }
+}
+function importFromGoogleSheet(){
+  gsheetSetBtn(true, "⏳ Chargement…");
+  const cbName = "coGvizCallback_" + Date.now();
+  let done = false;
+  let script = null;
+  const timeoutId = setTimeout(function(){ finish(new Error("délai dépassé (vérifiez la connexion internet)")); }, 15000);
+
+  function cleanup(){
+    clearTimeout(timeoutId);
+    try{ delete window[cbName]; }catch(e){ window[cbName] = undefined; }
+    if(script && script.parentNode) script.parentNode.removeChild(script);
+  }
+  function finish(err, counts){
+    if(done) return;
+    done = true;
+    cleanup();
+    gsheetSetBtn(false, "🌐 Charger automatiquement depuis le Google Sheet");
+    if(err){
+      alert("Chargement automatique impossible : "+err.message+"\n\nSi vous testez le fichier en local (file://), ce n'est pas forcément un problème de partage : Google bloque parfois ces requêtes venant d'un fichier local. Réessayez une fois la page déposée sur GitHub Pages (https).\nVous pouvez sinon importer un fichier .csv exporté du collège ci-dessous en attendant.");
+      return;
+    }
+    finishImport(counts);
+  }
+
+  window[cbName] = function(resp){
+    if(!resp || resp.status==="error"){
+      let detail = "raison inconnue";
+      if(resp && resp.errors && resp.errors.length){
+        const e0 = resp.errors[0];
+        detail = (e0.reason||"")+(e0.detailed_message?" — "+e0.detailed_message:(e0.message?" — "+e0.message:""));
+      }
+      finish(new Error("accès refusé par Google (détail : "+detail+")."));
+      return;
+    }
+    try{
+      const table = resp.table;
+      const headerCells = table.cols.map(function(c){ return normalize(c.label||c.id||""); });
+      const rows = table.rows.map(function(r){
+        return r.c.map(function(cell){ return cell ? (cell.v!=null ? cell.v : (cell.f!=null?cell.f:"")) : ""; });
+      });
+      const counts = applyAutoImportRows(headerCells, rows);
+      finish(null, counts);
+    }catch(err){
+      finish(new Error(err.message||"réponse inattendue de Google"));
+    }
+  };
+
+  const url = "https://docs.google.com/spreadsheets/d/"+GSHEET_ID+"/gviz/tq?gid="+GSHEET_GID+"&headers=1&tqx=responseHandler:"+cbName;
+  script = document.createElement("script");
+  script.src = url;
+  script.onerror = function(){ finish(new Error("impossible de contacter Google (réseau indisponible, ou feuille inaccessible)")); };
+  document.body.appendChild(script);
+}
+function classeKey(raw){
+  let n = normalize(raw).replace(/[^a-z0-9]/g,"");
+  const m = n.match(/^4(?:eme|e)?(\d)$/);
+  return m ? ("4e"+m[1]) : n;
+}
+function applyAutoImportRows(headerCells, rows){
+  const idxNom = headerCells.findIndex(h=>h.includes("nom") && !h.includes("prenom"));
+  const idxPrenom = headerCells.findIndex(h=>h.includes("prenom"));
+  const idxClasse = headerCells.findIndex(h=>h.includes("classe"));
+  const idxNiveau = headerCells.findIndex(h=>h.includes("niveau"));
+  if(idxNom<0) throw new Error("colonne 'Nom' introuvable dans l'en-tête");
+  if(idxClasse<0 && idxNiveau<0) throw new Error("aucune colonne Classe ou Niveau détectée");
+  const counts = {};
+  rows.forEach(cells=>{
+    const nom = (cells[idxNom]||"").toString().trim();
+    if(!nom) return;
+    const prenom = idxPrenom>=0 ? (cells[idxPrenom]||"").toString().trim() : "";
+    const classeRaw = idxClasse>=0 ? cells[idxClasse] : cells[idxNiveau];
+    const key = classeKey(classeRaw);
+    if(!CLASSES_COLLEGE.includes(key)) return;
+    const c = ensureClass(key);
+    const dup = c.students.find(s=>normalize(s.nom)===normalize(nom) && normalize(s.prenom)===normalize(prenom));
+    if(!dup){ c.students.push({id:uid(), nom, prenom, absent:false, dispense:false}); counts[key]=(counts[key]||0)+1; }
+  });
+  return counts;
+}
+function finishImport(counts){
+  saveState();
+  const classesTouchees = Object.keys(counts).sort();
+  if(classesTouchees.length){ uiState.top = classesTouchees[0]; saveUI(); }
+  renderApp();
+  const total = Object.values(counts).reduce((a,b)=>a+b,0);
+  if(total===0){ alert("Aucun élève de 4e1 à 4e4 reconnu.\nVérifiez la colonne Classe/Niveau (valeurs attendues : 4e1, 4e2, 4e3 ou 4e4)."); }
+  else{ alert(total+" élève(s) importé(s) automatiquement et répartis par classe :\n"+classesTouchees.map(k=>"• "+k+" : "+counts[k]+" élève(s)").join("\n")); }
+}
+/* ===================== RENDU : ONGLETS ===================== */
+function tabBar(tabs, activeId, actionName, extraAttrs, lvl){
+  return `<div class="tabbar lvl${lvl}">${tabs.map(t=>`
+    <button class="tabbtn ${t.extraClass||""} ${t.id===activeId?"active":""}" data-action="${actionName}" data-id="${escAttr(t.id)}" ${extraAttrs||""}>${t.label}${t.badge!=null?`<span class="tabbadge">${t.badge}</span>`:""}</button>
+  `).join("")}</div>`;
+}
+
+function renderApp(){
+  const scrollY = window.scrollY;
+  const extraClasses = Object.keys(state.classes).filter(c=>!CLASSES_COLLEGE.includes(c)).sort((a,b)=>a.localeCompare(b,"fr"));
+  const classNames = CLASSES_COLLEGE.concat(extraClasses);
+  const topTabs = [{id:"general", label:"📋 Général"}]
+    .concat(classNames.map((c,i)=>({id:c, label:"🏷️ "+c, badge:(state.classes[c]?state.classes[c].students.length:0), extraClass:"class-tab col-c"+(i%PALETTE_COUNT)})))
+    .concat([{id:"cartes", label:"🗺️ Cartes du parc"}]);
+  if(!topTabs.some(t=>t.id===uiState.top)) uiState.top = "general";
+
+  let panel = "";
+  if(uiState.top==="general") panel = renderGeneralPanel();
+  else if(uiState.top==="cartes") panel = renderCartesPanel();
+  else panel = renderClassPanel(uiState.top);
+
+  const html = tabBar(topTabs, uiState.top, "set-top-tab", "", 1) + `<div class="tabpanel">${panel}</div>`;
+  document.getElementById("app").innerHTML = html;
+  requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+}
+
+/* ---------- Général ---------- */
+function renderGeneralPanel(){
+  const nbClasses = Object.keys(state.classes).length;
+  const nbEleves = Object.values(state.classes).reduce((n,c)=>n+(c.students?c.students.length:0),0);
+  return `
+    <h2 class="ptitle">📋 Liste des élèves du collège — import</h2>
+    <div class="row">
+      <button class="btn-accent" id="gsheetBtn" style="padding:13px 22px;font-size:14px;" data-action="import-gsheet">🌐 Charger automatiquement depuis le Google Sheet</button>
+      <span class="hint">Nécessite une connexion internet et que le fichier soit partagé en lecture (« Toute personne disposant du lien »). Répartit directement chaque élève dans sa classe (4e1 à 4e4).</span>
+    </div>
+    <p class="hint" style="margin-top:10px;">Classeur source : <a href="https://docs.google.com/spreadsheets/d/1vviZWjfSYNOAf-Ic9X0DeUp5-F1CWg3rDEBcP67PSuY/edit?gid=0#gid=0" target="_blank" rel="noopener">ouvrir le Google Sheet</a>.</p>
+    <div class="row" style="margin-top:10px;">
+      <label class="btn" style="display:inline-block;">📁 Si le chargement automatique échoue : importer un fichier .csv exporté du collège
+        <input type="file" accept=".csv,.tsv,.txt" id="importCsvFile" style="display:none;">
+      </label>
+      <span class="hint">Fichier .csv avec les colonnes Nom / Prénom / Classe ou Niveau (Fichier → Télécharger → .csv depuis Sheets). Répartition par classe automatique.</span>
+    </div>
+    <hr class="sep">
+    <div class="hint"><b>${nbClasses}</b> classe(s) importée(s) — <b>${nbEleves}</b> élève(s) au total.
+    ${nbClasses>0 ? "<br>Classes : " + Object.keys(state.classes).sort((a,b)=>a.localeCompare(b,"fr")).map(c=>`<span class="badge">${escHtml(c)} (${state.classes[c].students.length})</span>`).join(" ") : ""}</div>
+  `;
+}
+
+/* ---------- Classe ---------- */
+function renderClassPanel(cls){
+  const c = ensureClass(cls);
+  const subTabs = [{id:"eleves", label:"👥 Élèves", badge:c.students.length}, {id:"s1", label:"Séance 1"}, {id:"s2", label:"Séance 2"}, {id:"s3", label:"Séance 3"}];
+  const active = uiState.classTab[cls] || "eleves";
+  if(!subTabs.some(t=>t.id===active)) uiState.classTab[cls]="eleves";
+  const activeFinal = uiState.classTab[cls] || "eleves";
+  let body;
+  if(activeFinal==="eleves") body = renderRosterBody(cls);
+  else body = renderSeancePanel(cls, Number(activeFinal.slice(1)));
+  return tabBar(subTabs, activeFinal, "set-class-tab", `data-class="${escAttr(cls)}"`, 2) + `<div class="tabpanel" style="box-shadow:none;">${body}</div>`;
+}
+
+function renderRosterBody(cls){
+  const c = state.classes[cls];
+  const rowsHtml = c.students.map((s,i)=>`
+    <tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
+      <td class="left">${escHtml(s.prenom)}</td>
+      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.students.${i}.absent" ${s.absent?"checked":""} data-bool="1"></td>
+      <td><input type="checkbox" data-path="classes.${escAttr(cls)}.students.${i}.dispense" ${s.dispense?"checked":""} data-bool="1"></td>
+    </tr>`).join("");
+  return `
+    <h2 class="ptitle">👥 Liste des élèves — absences / dispenses</h2>
+    <div class="table-wrap"><table class="co">
+      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th><th class="col-c6">Absent</th><th class="col-c5">Dispensé</th></tr></thead>
+      <tbody>${rowsHtml || "<tr><td colspan=4 class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+    </table></div>
+  `;
+}
+
+/* ---------- Séance ---------- */
+const SITUATIONS_BY_SEANCE = { 1:["suivi","etoile"], 2:["etoile","papillon"], 3:["papillon","scores"] };
+const ETOILE_BALISES = {1:5, 2:10};
+const SITU_LABEL = { suivi:"🧭 Suivi parcours", etoile:"⭐ Parcours Étoile", papillon:"🦋 Parcours Papillon", scores:"🏆 Course aux scores", bareme:"📐 Barème" };
+
+function renderSeancePanel(cls, num){
+  const se = ensureSeance(cls, num);
+  const situs = SITUATIONS_BY_SEANCE[num].concat(["bareme"]);
+  const seKey = cls+"_s"+num;
+  let active = uiState.seanceTab[seKey] || situs[0];
+  if(!situs.includes(active)){ active = situs[0]; uiState.seanceTab[seKey] = active; }
+
+  const header = `
+    <div class="row">
+      <div class="field"><label>Date de la séance</label>
+        <input type="date" data-path="classes.${escAttr(cls)}.seances.s${num}.date" value="${escAttr(se.date)}">
+      </div>
+      <button class="btn-navy" data-action="build-groupes" data-class="${escAttr(cls)}" data-seance="${num}">🔄 Constituer les binômes (présents)</button>
+      <span class="hint">${se.groupes.length} groupe(s) constitué(s).</span>
+    </div>
+    ${renderGroupes(cls, num)}
+    <hr class="sep">
+  `;
+  const subTabs = situs.map(id=>({id, label:SITU_LABEL[id]}));
+  const situationBody = renderSituationBody(cls, num, active);
+  return header + tabBar(subTabs, active, "set-seance-tab", `data-class="${escAttr(cls)}" data-seance="${num}"`, 3) +
+    `<div class="tabpanel" style="box-shadow:none;">${situationBody}</div>`;
+}
+
+function renderSituationBody(cls, num, type){
+  if(type==="suivi") return renderSuivi(cls,num);
+  if(type==="etoile") return renderEtoile(cls,num);
+  if(type==="papillon") return renderPapillon(cls,num);
+  if(type==="scores") return renderScores(cls,num);
+  if(type==="bareme") return renderBaremeBody(cls,num);
+  return "";
+}
+
+function renderGroupes(cls, num){
+  const se = ensureSeance(cls,num);
+  const c = state.classes[cls];
+  const assigned = new Set(se.groupes.flatMap(g=>g.memberIds));
+  const unassigned = c.students.filter(s=>!s.absent && !s.dispense && !assigned.has(s.id));
+  const cards = se.groupes.map((g,gi)=>`
+    <div class="groupe-card">
+      <div class="gtitle">Groupe ${gi+1}</div>
+      ${g.memberIds.map(sid=>{
+        const s = studentById(cls,sid);
+        return `<span class="chip">${escHtml(s?( (s.prenom||s.nom) ):"?")}
+          <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-student="${sid}">✕</button>
+        </span>`;
+      }).join("")}
+      ${unassigned.length? `<select data-action-select="add-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">
+        <option value="">+ ajouter un élève…</option>
+        ${unassigned.map(s=>`<option value="${s.id}">${escHtml(s.prenom||s.nom)}</option>`).join("")}
+      </select>` : ""}
+      <button class="btn-xs btn-danger" data-action="delete-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">supprimer groupe</button>
+    </div>
+  `).join("");
+  return `
+    ${cards || "<div class=\"empty\">Aucun groupe — cliquez sur « Constituer les binômes ».</div>"}
+    <div class="row" style="margin-top:6px;">
+      <button class="btn-small" data-action="add-groupe" data-class="${escAttr(cls)}" data-seance="${num}">+ nouveau groupe vide</button>
+      ${unassigned.length? `<span class="hint">Non assignés : ${unassigned.map(s=>escHtml(s.prenom||s.nom)).join(", ")}</span>`:""}
+    </div>
+  `;
+}
+
+/* ---------- Barème ---------- */
+function renderBaremeBody(cls, num){
+  const se = ensureSeance(cls,num);
+  const imgs = se.bareme.images||[];
+  return `
+    <h2 class="ptitle">📐 Barème (photo) — Séance ${num}</h2>
+    <label class="btn" style="display:inline-block;">📷 Ajouter une photo du barème
+      <input type="file" accept="image/*" data-action="upload-image" data-target="bareme" data-class="${escAttr(cls)}" data-seance="${num}" style="display:none;">
+    </label>
+    <div class="img-grid" style="margin-top:10px;">
+      ${imgs.map((imgId,i)=>`
+        <div class="img-card">${imageCache[imgId] ? `<img src="${imageCache[imgId]}" data-action="open-lightbox" title="Cliquer pour agrandir">` : `<div class="empty">Chargement de l'image…</div>`}
+          <div class="cap"><span>Barème ${i+1}</span>
+          <button class="btn-xs btn-danger" data-action="delete-image" data-target="bareme" data-class="${escAttr(cls)}" data-seance="${num}" data-index="${i}">✕</button></div>
+        </div>`).join("") || "<div class=\"empty\">Aucune photo de barème ajoutée.</div>"}
+    </div>
+  `;
+}
+
+/* ===================== SITUATIONS ===================== */
+/* ---- Suivi parcours (séance 1) ---- */
+function renderSuivi(cls, num){
+  const se = ensureSeance(cls,num);
+  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const rows = se.groupes.map((g)=>{
+    const r = se.suivi.rows[g.id] || {depart:null, log:[], retour:null, obs:""};
+    se.suivi.rows[g.id]=r;
+    const total = (r.depart && r.retour) ? fmtElapsed(r.retour-r.depart) : "";
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="suivi-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
+      <td class="left" style="max-width:260px;white-space:normal;">
+        ${r.log.map((l,li)=>`<span class="chip">${escHtml(l.code)} (${fmtClock(l.ts)})
+          <button data-action="suivi-remove-log" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${li}">✕</button></span>`).join("")}
+        <button class="btn-xs" data-action="suivi-add-log" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" ${!r.depart?"disabled":""}>+ balise</button>
+      </td>
+      <td>${r.retour? fmtClock(r.retour) : `<button class="btn-small btn-navy" data-action="suivi-retour" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" ${!r.depart?"disabled":""}>Retour</button>`}</td>
+      <td><b>${total}</b></td>
+      <td class="left"><input class="inline-text" type="text" value="${escAttr(r.obs)}" data-path="classes.${escAttr(cls)}.seances.s${num}.suivi.rows.${g.id}.obs"></td>
+    </tr>`;
+  }).join("");
+  return `<div class="table-wrap"><table class="co">
+    <thead><tr>
+      <th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th>
+      <th class="col-c7">Retour</th><th class="col-c5">Temps total</th><th class="col-c2 left">Observations</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---- Parcours Étoile (séance 1 : 5 balises / séance 2 : 10 balises) ---- */
+function renderEtoile(cls, num){
+  const se = ensureSeance(cls,num);
+  const nb = ETOILE_BALISES[num] || 5;
+  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const maxTotalMs = num===2 ? 90*60*1000 : null;
+  const headerBalises = Array.from({length:nb},(_,i)=>`<th class="col-c${(i+2)%PALETTE_COUNT}">B${i+1}</th>`).join("");
+  const rows = se.groupes.map(g=>{
+    const r = se.etoile.rows[g.id] || {depart:null, balises:Array.from({length:nb},()=>({status:"none",time:null})), prevu:"", note:""};
+    if(!r.balises || r.balises.length!==nb){ r.balises = Array.from({length:nb},(_,i)=> r.balises&&r.balises[i] ? r.balises[i] : ({status:"none",time:null})); }
+    se.etoile.rows[g.id]=r;
+    const nbTrouvees = r.balises.filter(b=>b.status==="ok").length;
+    const okTimes = r.balises.filter(b=>b.status==="ok" && b.time).map(b=>b.time);
+    const lastOk = okTimes.length? Math.max(...okTimes) : null;
+    const totalMs = (r.depart && lastOk) ? (lastOk-r.depart) : null;
+    const totalColor = (totalMs!=null && maxTotalMs && totalMs>maxTotalMs) ? "red" : (totalMs!=null?"green":"");
+    const suggestedNote = Math.round((nbTrouvees/nb)*20*10)/10;
+    const balisesHtml = r.balises.map((b,bi)=>{
+      let cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":"");
+      let inner = b.status==="ok" ? "✔" : (b.status==="ko" ? "✘" : "—");
+      let timeTag = "";
+      if(b.status==="ok" && b.time && r.depart){
+        const dms = b.time-r.depart; timeTag = `<span class="time-tag ${delayClass(dms)}">${fmtElapsed(dms)}</span>`;
+      }
+      return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span></td>`;
+    }).join("");
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: B2,B5,B9)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
+      <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="etoile-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
+      ${balisesHtml}
+      <td><b>${nbTrouvees}/${nb}</b></td>
+      <td><b class="time-tag ${totalColor}">${totalMs!=null?fmtElapsed(totalMs):""}</b></td>
+      <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.note"></td>
+    </tr>`;
+  }).join("");
+  return `<p class="hint">Cliquez sur une balise pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
+  ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min." : ""} La « note suggérée » est pré-remplie, modifiez-la selon le barème (photo).</p>
+  <div class="table-wrap"><table class="co">
+    <thead><tr>
+      <th class="col-c0">Groupe</th><th class="col-c8 left">Parcours prévu</th><th class="col-c4">Départ</th>
+      ${headerBalises}
+      <th class="col-c5">Trouvées</th><th class="col-c6">Temps total</th><th class="col-c7">Note</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---- Parcours Papillon (séance 2 et 3) ---- */
+function renderPapillon(cls, num){
+  const se = ensureSeance(cls,num);
+  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const emptyBalises = ()=>Array.from({length:3},()=>({state:"vide"}));
+  const rows = se.groupes.map(g=>{
+    const r = se.papillon.rows[g.id] || {depart:null, p1:{balises:emptyBalises(), status:"none", time:null}, p2:{balises:emptyBalises(), status:"none", time:null}, note:""};
+    se.papillon.rows[g.id]=r;
+    const points = p=>p.balises.reduce((s,b)=> s + (b.state==="rouge"?10:(b.state==="verte"?5:0)),0);
+    const totalPoints = points(r.p1)+points(r.p2);
+    function parcoursCell(p, pnum){
+      const chips = p.balises.map((b,bi)=>{
+        const label = b.state==="vide"?"—":(b.state==="rouge"?"Rge 10":(b.state==="verte"?"Vte 5":"Raté"));
+        const cls2 = b.state==="vide"?"":b.state;
+        return `<span class="cell-btn ${cls2}" style="min-width:52px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
+      }).join("");
+      let statusLabel = p.status==="ok"?"✔ validé":(p.status==="ko"?"✘ invalide":"en cours");
+      let statusCls = p.status==="ok"?"ok":(p.status==="ko"?"ko":"");
+      let timeHtml = (p.status==="ok" && p.time && r.depart)? `<span class="time-tag green">${fmtElapsed(p.time-r.depart)}</span>` : "";
+      return `<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div>`;
+    }
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="papillon-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
+      <td class="left">${parcoursCell(r.p1,1)}</td>
+      <td class="left">${parcoursCell(r.p2,2)}</td>
+      <td><b>${totalPoints} pts</b></td>
+      <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!==""&&r.note!=null?r.note:totalPoints)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
+    </tr>`;
+  }).join("");
+  return `<p class="hint">30 min maximum. Cliquez sur chaque balise du parcours pour choisir son résultat (—, balise Rouge = 10 pts, balise Verte = 5 pts, Ratée). Cliquez ensuite sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
+  <div class="table-wrap"><table class="co">
+    <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Parcours 1 (3 balises)</th><th class="col-c2 left">Parcours 2 (3 balises)</th><th class="col-c5">Points</th><th class="col-c7">Note</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---- Course aux scores (séance 3) ---- */
+function renderScores(cls, num){
+  const se = ensureSeance(cls,num);
+  if(!se.groupes.length) return "<div class=\"empty\">Constituez d'abord les binômes.</div>";
+  const rows = se.groupes.map(g=>{
+    const r = se.scores.rows[g.id] || {depart:null, fin:null, found:[], note:""};
+    se.scores.rows[g.id]=r;
+    const total = r.found.reduce((s,f)=>s+(Number(f.points)||0),0);
+    const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
+    return `<tr>
+      <td class="left col-c0" style="color:#fff;">${escHtml(groupLabel(cls,g))}</td>
+      <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="scores-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
+      <td class="left" style="max-width:260px;white-space:normal;">
+        ${r.found.map((f,fi)=>`<span class="chip">${escHtml(f.code)} (${f.points}pt)
+          <button data-action="scores-remove" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${fi}">✕</button></span>`).join("")}
+        <button class="btn-xs" data-action="scores-add" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" ${!r.depart?"disabled":""}>+ balise trouvée</button>
+      </td>
+      <td>${r.fin? fmtClock(r.fin) : `<button class="btn-small btn-navy" data-action="scores-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" ${!r.depart?"disabled":""}>Fin</button>`}</td>
+      <td><b>${total} pts</b></td>
+      <td><b>${tempsTotal}</b></td>
+      <td><input class="note-input" type="number" min="0" max="20" step="0.5" value="${escAttr(r.note!=null?r.note:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
+    </tr>`;
+  }).join("");
+  return `<p class="hint">Chaque équipe cherche librement un maximum de balises dans le temps imparti. Ajoutez chaque balise trouvée avec son code et le nombre de points qu'elle rapporte.</p>
+  <div class="table-wrap"><table class="co">
+    <thead><tr><th class="col-c0">Groupe</th><th class="col-c4">Départ</th><th class="col-c1 left">Balises trouvées</th><th class="col-c7">Fin</th><th class="col-c5">Score</th><th class="col-c6">Temps total</th><th class="col-c8">Note</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---------- Cartes du parc ---------- */
+function renderCartesPanel(){
+  const imgs = state.cartes||[];
+  return `
+    <h2 class="ptitle">🗺️ Cartes du parc</h2>
+    <label class="btn" style="display:inline-block;">📷 Ajouter une carte
+      <input type="file" accept="image/*" data-action="upload-image" data-target="cartes" style="display:none;">
+    </label>
+    <div class="img-grid" style="margin-top:10px;">
+      ${imgs.map((it,i)=>`
+        <div class="img-card">${imageCache[it.imgId] ? `<img src="${imageCache[it.imgId]}" data-action="open-lightbox" title="Cliquer pour agrandir">` : `<div class="empty">Chargement de l'image…</div>`}
+          <div class="cap"><input class="inline-text" style="width:70%;" type="text" value="${escAttr(it.label)}" data-path="cartes.${i}.label">
+          <button class="btn-xs btn-danger" data-action="delete-image" data-target="cartes" data-index="${i}">✕</button></div>
+        </div>`).join("") || "<div class=\"empty\">Aucune carte ajoutée.</div>"}
+    </div>
+  `;
+}
+
+/* ===================== ACTIONS ===================== */
+const app = document.getElementById("app");
+
+app.addEventListener("click", function(e){
+  const t = e.target.closest("[data-action]");
+  if(!t) return;
+  const action = t.dataset.action;
+  const cls = t.dataset.class, num = t.dataset.seance, gid = t.dataset.groupe, sid = t.dataset.student;
+
+  if(action==="open-lightbox"){ openLightbox(t.getAttribute("src")); return; }
+  if(action==="close-lightbox"){ closeLightbox(); return; }
+
+  if(action==="set-top-tab"){ uiState.top = t.dataset.id; saveUI(); renderApp(); return; }
+  if(action==="set-class-tab"){ uiState.classTab[cls] = t.dataset.id; saveUI(); renderApp(); return; }
+  if(action==="set-seance-tab"){ uiState.seanceTab[cls+"_s"+num] = t.dataset.id; saveUI(); renderApp(); return; }
+
+  if(action==="import-gsheet"){ importFromGoogleSheet(); return; }
+
+  if(action==="build-groupes"){
+    const se = ensureSeance(cls,num);
+    const hasData = Object.keys(se.suivi.rows).length || Object.keys(se.etoile.rows).length || Object.keys(se.papillon.rows).length || Object.keys(se.scores.rows).length;
+    if(hasData && !confirm("Regénérer les binômes va réinitialiser le suivi déjà saisi pour cette séance. Continuer ?")) return;
+    const roster = state.classes[cls].students.filter(s=>!s.absent && !s.dispense);
+    const arr = shuffleArray([...roster]);
+    const n = arr.length, groupsCount = Math.floor(n/2);
+    const groupes = [];
+    let idx=0;
+    for(let g=0;g<groupsCount;g++){
+      const isLast = g===groupsCount-1;
+      const size = (isLast && n%2===1) ? 3 : 2;
+      groupes.push({id:uid(), memberIds: arr.slice(idx, idx+size).map(s=>s.id)});
+      idx+=size;
+    }
+    if(n===1) groupes.push({id:uid(), memberIds:[arr[0].id]});
+    se.groupes = groupes;
+    se.suivi.rows={}; se.etoile.rows={}; se.papillon.rows={}; se.scores.rows={};
+    saveState(); renderApp(); return;
+  }
+  if(action==="add-groupe"){ ensureSeance(cls,num).groupes.push({id:uid(), memberIds:[]}); saveState(); renderApp(); return; }
+  if(action==="delete-groupe"){ const se=ensureSeance(cls,num); se.groupes = se.groupes.filter(g=>g.id!==gid); saveState(); renderApp(); return; }
+  if(action==="remove-from-groupe"){ const se=ensureSeance(cls,num); const g=se.groupes.find(g=>g.id===gid); if(g) g.memberIds=g.memberIds.filter(id=>id!==sid); saveState(); renderApp(); return; }
+
+  if(action==="etoile-depart"){ setRow("etoile",cls,num,gid,r=>{r.depart=Date.now();}); return; }
+  if(action==="toggle-balise"){
+    const bi = Number(t.dataset.index);
+    setRow("etoile",cls,num,gid,r=>{
+      if(!r.depart){ alert("Cliquez d'abord sur Départ."); return; }
+      const b = r.balises[bi];
+      if(b.status==="none"){ b.status="ok"; b.time=Date.now(); }
+      else if(b.status==="ok"){ b.status="ko"; }
+      else { b.status="none"; b.time=null; }
+    });
+    return;
+  }
+
+  if(action==="papillon-depart"){ setRow("papillon",cls,num,gid,r=>{r.depart=Date.now();}); return; }
+  if(action==="toggle-papillon-balise"){
+    const pnum = t.dataset.parcours, bi = Number(t.dataset.index);
+    setRow("papillon",cls,num,gid,r=>{
+      const p = r["p"+pnum]; const b = p.balises[bi];
+      const order = ["vide","rouge","verte","rate"];
+      b.state = order[(order.indexOf(b.state)+1)%order.length];
+    });
+    return;
+  }
+  if(action==="toggle-parcours-status"){
+    const pnum = t.dataset.parcours;
+    setRow("papillon",cls,num,gid,r=>{
+      if(!r.depart){ alert("Cliquez d'abord sur Départ."); return; }
+      const p = r["p"+pnum];
+      if(p.status==="none"){ p.status="ok"; p.time=Date.now(); }
+      else if(p.status==="ok"){ p.status="ko"; }
+      else { p.status="none"; p.time=null; }
+    });
+    return;
+  }
+
+  if(action==="suivi-depart"){ setRow("suivi",cls,num,gid,r=>{r.depart=Date.now();}); return; }
+  if(action==="suivi-retour"){ setRow("suivi",cls,num,gid,r=>{r.retour=Date.now();}); return; }
+  if(action==="suivi-add-log"){
+    const code = prompt("Code de la balise trouvée ?"); if(!code) return;
+    setRow("suivi",cls,num,gid,r=>{ r.log.push({code, ts:Date.now()}); });
+    return;
+  }
+  if(action==="suivi-remove-log"){ const li=Number(t.dataset.index); setRow("suivi",cls,num,gid,r=>{ r.log.splice(li,1); }); return; }
+
+  if(action==="scores-depart"){ setRow("scores",cls,num,gid,r=>{r.depart=Date.now();}); return; }
+  if(action==="scores-fin"){ setRow("scores",cls,num,gid,r=>{r.fin=Date.now();}); return; }
+  if(action==="scores-add"){
+    const code = prompt("Code de la balise trouvée ?"); if(!code) return;
+    const pts = Number(prompt("Points pour cette balise ?","5")) || 0;
+    setRow("scores",cls,num,gid,r=>{ r.found.push({code, points:pts}); });
+    return;
+  }
+  if(action==="scores-remove"){ const fi=Number(t.dataset.index); setRow("scores",cls,num,gid,r=>{ r.found.splice(fi,1); }); return; }
+
+  if(action==="upload-image"){ return; } /* handled by change */
+  if(action==="delete-image"){
+    const target = t.dataset.target, i = Number(t.dataset.index);
+    let imgId;
+    if(target==="cartes"){ imgId = state.cartes[i].imgId; state.cartes.splice(i,1); }
+    else { const se = ensureSeance(cls,num); imgId = se.bareme.images[i]; se.bareme.images.splice(i,1); }
+    delete imageCache[imgId];
+    idbDelete(imgId).catch(()=>{});
+    saveState(); renderApp(); return;
+  }
+
+  if(action==="export-backup"){
+    const exportObj = { state: state, images: imageCache };
+    const blob = new Blob([JSON.stringify(exportObj)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "CO_sauvegarde_"+new Date().toISOString().slice(0,10)+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    return;
+  }
+  if(action==="reset-all"){
+    if(confirm("Supprimer définitivement toutes les données (classes, séances, cartes) ? Cette action est irréversible — exportez une sauvegarde avant si besoin.")){
+      Object.keys(imageCache).forEach(id=>{ idbDelete(id).catch(()=>{}); });
+      imageCache = {};
+      state = defaultState(); saveState();
+      uiState = defaultUI(); saveUI();
+      renderApp();
+    }
+    return;
+  }
+});
+
+function openLightbox(src){
+  if(!src) return;
+  document.getElementById("lightboxImg").src = src;
+  document.getElementById("lightbox").style.display = "flex";
+}
+function closeLightbox(){
+  document.getElementById("lightbox").style.display = "none";
+  document.getElementById("lightboxImg").src = "";
+}
+document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeLightbox(); });
+
+function setRow(situ, cls, num, gid, mutate){
+  const se = ensureSeance(cls,num);
+  const defaults = {
+    suivi: ()=>({depart:null, log:[], retour:null, obs:""}),
+    etoile: ()=>({depart:null, balises:Array.from({length:ETOILE_BALISES[num]||5},()=>({status:"none",time:null})), prevu:"", note:""}),
+    papillon: ()=>({depart:null, p1:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, p2:{balises:Array.from({length:3},()=>({state:"vide"})), status:"none", time:null}, note:""}),
+    scores: ()=>({depart:null, fin:null, found:[], note:""})
+  };
+  if(!se[situ].rows[gid]) se[situ].rows[gid] = defaults[situ]();
+  mutate(se[situ].rows[gid]);
+  saveState(); renderApp();
+}
+
+app.addEventListener("change", function(e){
+  const el = e.target;
+
+  if(el.dataset.path){
+    const val = el.dataset.bool ? el.checked : el.value;
+    setPath(state, el.dataset.path, val);
+    saveState(); renderApp();
+    return;
+  }
+  if(el.dataset.actionSelect==="add-to-groupe"){
+    const cls = el.dataset.class, num = el.dataset.seance, gid = el.dataset.groupe, sid = el.value;
+    if(!sid) return;
+    const se = ensureSeance(cls,num);
+    const g = se.groupes.find(g=>g.id===gid);
+    if(g) g.memberIds.push(sid);
+    saveState(); renderApp();
+    return;
+  }
+  if(el.dataset.action==="upload-image"){
+    const file = el.files[0]; if(!file) return;
+    const target = el.dataset.target, cls = el.dataset.class, num = el.dataset.seance;
+    resizeImageFile(file, 1600, 0.82).then(function(dataURL){
+      const imgId = uid();
+      imageCache[imgId] = dataURL;
+      idbPut(imgId, dataURL).catch(()=>{ alert("Le stockage des images semble indisponible sur cet appareil/navigateur."); });
+      if(target==="cartes"){
+        state.cartes = state.cartes||[];
+        state.cartes.push({id:uid(), label:file.name, imgId:imgId});
+      } else {
+        const se = ensureSeance(cls,num);
+        se.bareme.images.push(imgId);
+      }
+      saveState(); renderApp();
+    }).catch(function(){ alert("Impossible de traiter cette image."); });
+    return;
+  }
+  if(el.id==="importCsvFile"){
+    const file = el.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const {headerCells, rows} = parseDelimited(reader.result);
+      if(!headerCells.length){ alert("Aucune donnée détectée dans le fichier."); return; }
+      let counts;
+      try{ counts = applyAutoImportRows(headerCells, rows); }
+      catch(err){
+        if(err.message.indexOf("Nom")>=0) alert("Colonne 'Nom' introuvable dans la première ligne du fichier (en-têtes).");
+        else alert("Aucune colonne Classe ou Niveau détectée dans le fichier.");
+        return;
+      }
+      finishImport(counts);
+      el.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+    return;
+  }
+  if(el.id==="importBackupFile"){
+    const file = el.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      let data;
+      try{ data = JSON.parse(reader.result); }
+      catch(err){ alert("Fichier de sauvegarde invalide."); return; }
+      if(!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
+      const newState = data && data.state ? data.state : data;
+      const newImages = data && data.images ? data.images : {};
+      state = newState;
+      const putTasks = Object.keys(newImages).map(id=>{
+        imageCache[id] = newImages[id];
+        return idbPut(id, newImages[id]).catch(()=>{});
+      });
+      Promise.all(putTasks).then(()=>migrateLegacyImages()).then(()=>{
+        saveState(); renderApp();
+      });
+    };
+    reader.readAsText(file,"UTF-8");
+    return;
+  }
+});
+
+/* ===================== HORLOGE ===================== */
+setInterval(()=>{
+  const el = document.getElementById("liveClock");
+  if(el) el.textContent = new Date().toLocaleTimeString("fr-FR");
+}, 1000);
+
+/* ===================== INIT ===================== */
+renderApp();
+idbGetAll().then(function(map){ imageCache = map; return migrateLegacyImages(); }).then(renderApp).catch(function(){ renderApp(); });
+
+/* Hors ligne (une fois ouverte au moins une fois) : nécessite une page servie en https (GitHub Pages).
+   Ne fonctionne pas en ouvrant le fichier directement (file://), ce qui est normal. */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
