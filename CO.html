@@ -113,6 +113,13 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .cell-btn.rate{background:#eceff2;border-color:#9aa6b3;color:#6b7684;text-decoration:line-through;}
 .cell-btn.partial{background:#fdf0e0;border-color:#e08c00;color:#8a5600;}
 .sens-btn{font-size:26px;font-weight:900;min-width:44px;padding:6px 10px;}
+.recap-table{border-radius:10px;overflow:hidden;}
+.recap-table thead th{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 70%,#1b3550 100%);color:#fff;font-weight:700;border:none;padding:11px 14px;}
+.recap-table tbody td{border-color:#ffffff90;}
+.recap-table tbody tr:hover{filter:brightness(0.97);}
+.comport-toggles{display:flex;gap:4px;justify-content:center;}
+.comport-btn{padding:5px 9px;border-radius:7px;border:2px solid #0002;background:#ffffffb0;font-size:11px;font-weight:800;cursor:pointer;color:inherit;opacity:.65;}
+.comport-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;opacity:1;}
 .time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
 .time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
 .chip{display:inline-flex;align-items:center;gap:5px;background:#eef2f6;border-radius:20px;padding:3px 9px;font-size:11.5px;margin:2px;}
@@ -596,6 +603,10 @@ function studentById(cls, id){
   const c = state.classes[cls]; if(!c) return null;
   return (c.students||[]).find(s=>s.id===id) || null;
 }
+function studentShortName(s){
+  if(!s) return "?";
+  return [s.prenom, s.nom].filter(Boolean).join(" ") || "?";
+}
 function sortMemberIdsByRoster(cls, memberIds){
   const roster = (state.classes[cls] && state.classes[cls].students) || [];
   const order = {};
@@ -959,37 +970,41 @@ function studentNoteForSitu(se, situ, studentId){
   const row = se[situ] && se[situ].rows && se[situ].rows[g.id];
   return (row && row.note!=null && row.note!=="") ? row.note : "";
 }
+const COMPORT_OPTIONS = ["TB","S","F","I"];
+function manualGradeBtns(cls, num, sid, field, current){
+  return COMPORT_OPTIONS.map(opt=>`<button type="button" class="comport-btn ${current===opt?"active":""}" data-action="set-manual-grade" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${sid}" data-field="${field}" data-value="${opt}">${opt}</button>`).join("");
+}
 function renderRecap(cls, num){
   const se = ensureSeance(cls, num);
   const c = state.classes[cls];
+  if(!se.observations) se.observations = {};
+  if(!se.comportement) se.comportement = {};
+  if(num===1 && !se.sa1TraceStop) se.sa1TraceStop = {};
   const situs = SITUATIONS_BY_SEANCE[num];
   const students = [...c.students].sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
-  const situHeaders = situs.map((situ,i)=>`<th class="col-c${(i+1)%PALETTE_COUNT}">${SITU_LABEL[situ]}</th>`).join("");
-  const rows = students.map(s=>{
+  const situHeaders = situs.map(situ=>`<th>${SITU_LABEL[situ]}</th>`).join("") + (num===1 ? `<th>SA1 Tracé stop</th>` : "");
+  const rows = students.map((s,i)=>{
     const cells = situs.map(situ=>{
       const note = studentNoteForSitu(se, situ, s.id);
       return `<td><b>${escHtml(note!==""&&note!=null?String(note):"—")}</b></td>`;
     }).join("");
-    const comport = se.comportement[s.id] || "";
-    return `<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
+    const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", se.sa1TraceStop[s.id]||"")}</div></td>` : "";
+    const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", se.comportement[s.id]||"");
+    const c2 = ROW_COLORS[i % ROW_COLORS.length];
+    return `<tr style="background:${c2.bg};color:${c2.text};">
+      <td class="left" style="font-weight:800;">${escHtml(s.nom)}</td>
       <td class="left">${escHtml(s.prenom)}</td>
-      ${cells}
-      <td><select data-action-select="set-comportement" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${s.id}">
-        <option value="" ${!comport?"selected":""}>—</option>
-        <option value="TB" ${comport==="TB"?"selected":""}>TB</option>
-        <option value="S" ${comport==="S"?"selected":""}>S</option>
-        <option value="F" ${comport==="F"?"selected":""}>F</option>
-        <option value="I" ${comport==="I"?"selected":""}>I</option>
-      </select></td>
+      ${cells}${sa1Cell}
+      <td><div class="comport-toggles">${comportBtns}</div></td>
+      <td class="left"><input class="inline-text" type="text" style="width:160px;" placeholder="observation…" value="${escAttr(se.observations[s.id]||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.observations.${s.id}"></td>
     </tr>`;
   }).join("");
   return `
     <h2 class="ptitle">📊 Récapitulatif — Séance ${num}</h2>
-    <p class="hint">Élèves par ordre alphabétique, notes obtenues pour chaque situation de cette séance, et comportement à saisir manuellement.</p>
-    <div class="table-wrap"><table class="co">
-      <thead><tr><th class="col-c0 left">Nom</th><th class="col-c8 left">Prénom</th>${situHeaders}<th class="col-c6">Comportement</th></tr></thead>
-      <tbody>${rows || "<tr><td colspan=\""+(3+situs.length)+"\" class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+    <p class="hint">Élèves par ordre alphabétique, notes obtenues pour chaque situation de cette séance. Cliquez sur TB/S/F/I pour le comportement (re-cliquer désélectionne).</p>
+    <div class="table-wrap"><table class="co recap-table">
+      <thead><tr><th class="left">Nom</th><th class="left">Prénom</th>${situHeaders}<th>Comportement</th><th class="left">Observations</th></tr></thead>
+      <tbody>${rows || "<tr><td colspan=\""+(4+situs.length+(num===1?1:0))+"\" class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
     </table></div>
   `;
 }
@@ -1025,11 +1040,11 @@ function renderGroupesPool(cls, num, situ){
 
   if(!unassigned.length) return c.students.length ? `<div class="hint">Tous les élèves présents sont assignés à un groupe pour cette situation.</div>` : "";
   return `
-    <div class="hint" style="margin-bottom:4px;">👆 Cliquez sur un élève puis sur un second pour former un binôme${pendingStudent?` — <b>${escHtml(pendingStudent.prenom||pendingStudent.nom)}</b> sélectionné(e), cliquez sur un autre élève (ou sur un groupe dans le tableau pour en faire un trio) :`:" :"}</div>
+    <div class="hint" style="margin-bottom:4px;">👆 Cliquez sur un élève puis sur un second pour former un binôme${pendingStudent?` — <b>${escHtml(studentShortName(pendingStudent))}</b> sélectionné(e), cliquez sur un autre élève (ou sur un groupe dans le tableau pour en faire un trio) :`:" :"}</div>
     <div class="pool">
       ${unassigned.map(s=>{
         const sel = pending===s.id;
-        return `<button class="student-chip ${sel?"selected":""}" data-action="pick-student" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-student="${s.id}">${escHtml(s.prenom||s.nom)}</button>`;
+        return `<button class="student-chip ${sel?"selected":""}" data-action="pick-student" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-student="${s.id}">${escHtml(studentShortName(s))}</button>`;
       }).join("")}
     </div>
   `;
@@ -1042,7 +1057,7 @@ function groupeCellHtml(cls, num, situ, g, gi){
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
     <div>${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;">${escHtml(s?(s.prenom||s.nom):"?")}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;">${escHtml(studentShortName(s))}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
@@ -1499,6 +1514,14 @@ document.addEventListener("click", function(e){
     setRow("suivi",cls,num,gid,r=>{ r.sens = (r.sens==="aller") ? "retour" : "aller"; });
     return;
   }
+  if(action==="set-manual-grade"){
+    const sid = t.dataset.student, val = t.dataset.value, field = t.dataset.field;
+    const se = ensureSeance(cls,num);
+    if(!se[field]) se[field] = {};
+    se[field][sid] = (se[field][sid]===val) ? "" : val;
+    saveState(); renderApp();
+    return;
+  }
   if(action==="toggle-suivi-balise"){
     const bi = Number(t.dataset.index);
     setRow("suivi",cls,num,gid,r=>{
@@ -1626,13 +1649,6 @@ document.addEventListener("change", function(e){
   if(el.dataset.path){
     const val = el.dataset.bool ? el.checked : el.value;
     setPath(state, el.dataset.path, val);
-    saveState(); renderApp();
-    return;
-  }
-  if(el.dataset.actionSelect==="set-comportement"){
-    const cls = el.dataset.class, num = el.dataset.seance, sid = el.dataset.student;
-    const se = ensureSeance(cls,num);
-    se.comportement[sid] = el.value;
     saveState(); renderApp();
     return;
   }
