@@ -635,7 +635,8 @@ function studentById(cls, id){
 }
 function studentShortName(s){
   if(!s) return "?";
-  return [s.prenom, s.nom].filter(Boolean).join(" ") || "?";
+  const nomFirst = (s.nom||"").trim().split(/\s+/)[0] || "";
+  return [s.prenom, nomFirst].filter(Boolean).join(" ") || "?";
 }
 function sortMemberIdsByRoster(cls, memberIds){
   const roster = (state.classes[cls] && state.classes[cls].students) || [];
@@ -1263,7 +1264,7 @@ function groupeCellHtml(cls, num, situ, g, gi){
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
     <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:normal;max-width:150px;line-height:1.2;font-size:15px;font-weight:700;padding:4px 10px;">${escHtml(studentShortName(s))}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;font-size:15px;font-weight:700;padding:3px 9px;">${escHtml(studentShortName(s))}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
@@ -1530,17 +1531,17 @@ function renderPapillon(cls, num){
     migratePapillonRow(r);
     function parcoursCell(p, pnum, pField){
       const chips = p.balises.map((b,bi)=>{
-        if(b.code==null) return `<span class="cell-btn" style="min-width:52px;margin:1px;">—</span>`;
+        if(b.code==null) return `<span class="cell-btn" style="min-width:44px;margin:1px;">—</span>`;
         const label = (b.found?"✔ ":"")+b.code+" ("+(b.color==="rouge"?rougePts:5)+")";
         const cls2 = b.found ? b.color : "";
-        return `<span class="cell-btn ${cls2}" style="min-width:60px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
+        return `<span class="cell-btn ${cls2}" style="min-width:52px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
       }).join("");
       const departHtml = p.depart
         ? `<b class="time-tag depart" style="font-size:14px;">${fmtClock(p.depart)}</b>`
-        : `<button class="btn-small btn-teal" style="font-size:13px;padding:5px 10px;" data-action="papillon-parcours-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">Départ</button>`;
+        : `<button class="btn-small btn-teal" style="font-size:13px;padding:4px 8px;" data-action="papillon-parcours-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">Départ</button>`;
       const finHtml = p.fin
         ? `<b class="time-tag fin" style="font-size:14px;">${fmtClock(p.fin)}</b>`
-        : `<button class="btn-small btn-navy" style="font-size:13px;padding:5px 10px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
+        : `<button class="btn-small btn-navy" style="font-size:13px;padding:4px 8px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
       let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green" style="font-size:14px;">${fmtElapsed(p.fin-p.depart)}</span>` : "";
       const numLabel = (pField==="p3")
         ? `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
