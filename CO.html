@@ -196,6 +196,12 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
   table.co th,table.co td{padding:2px 4px;font-size:11px;}
   .cell-btn{font-size:10.5px;padding:2px 4px;}
 }
+#printArea{display:none;}
+@media print{
+  body *{visibility:hidden;}
+  #printArea, #printArea *{visibility:visible;}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%;}
+}
 </style>
 </head>
 <body>
@@ -220,6 +226,8 @@ input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px
 <main id="app"></main>
 
 <div id="floatingClock" class="floating-clock">--:--:--</div>
+
+<div id="printArea"></div>
 
 <div id="lightbox" class="lightbox" style="display:none;" data-action="close-lightbox">
   <button class="lb-close" data-action="close-lightbox">✕</button>
@@ -1099,7 +1107,7 @@ function gradeColorClass(val){
 function manualGradeBtns(cls, num, sid, field, current){
   return COMPORT_OPTIONS.map(opt=>`<button type="button" class="comport-btn ${current===opt?"active "+gradeColorClass(opt):""}" data-action="set-manual-grade" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${sid}" data-field="${field}" data-value="${opt}">${opt}</button>`).join("");
 }
-function renderRecap(cls, num){
+function recapRowData(cls, num){
   const se = ensureSeance(cls, num);
   const c = state.classes[cls];
   if(!se.observations) se.observations = {};
@@ -1107,14 +1115,14 @@ function renderRecap(cls, num){
   if(num===1 && !se.sa1TraceStop) se.sa1TraceStop = {};
   const situs = SITUATIONS_BY_SEANCE[num];
   const students = [...c.students].sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
-  const situHeaders = situs.map(situ=>`<th>${SITU_LABEL[situ]}</th>`).join("") + (num===1 ? `<th>SA1 Tracé stop</th>` : "");
-  const rows = students.map((s,i)=>{
-    const cells = situs.map(situ=>{
+  const data = students.map(s=>{
+    const situValues = situs.map(situ=>{
       const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
       const g = groupes.find(gr=>gr.memberIds.includes(s.id));
-      if(!g) return `<td><span class="hint">—</span></td>`;
+      if(!g) return "";
       if(!se[situ].rows[g.id]) se[situ].rows[g.id] = defaultRowFor(situ, num);
       const row = se[situ].rows[g.id];
+      if(situ==="papillon") migratePapillonRow(row);
       let display = row.note;
       if(display==="" || display==null){
         if(situ==="suivi") display = suggestedNoteSuivi(row);
@@ -1122,21 +1130,95 @@ function renderRecap(cls, num){
         else if(situ==="papillon") display = papillonPointsAndNote(row, num).suggestedNote;
         else if(situ==="scores") display = scoresPointsAndNote(row).suggestedNote;
       }
+      return display!=null ? display : "";
+    });
+    return { s, groupId: (()=>{
+        for(const situ of situs){ const groupes=(se.groupesBySitu&&se.groupesBySitu[situ])||[]; const g=groupes.find(gr=>gr.memberIds.includes(s.id)); if(g) return g.id; }
+        return null;
+      })(),
+      situValues,
+      sa1: num===1 ? (se.sa1TraceStop[s.id]||"") : null,
+      comportement: se.comportement[s.id]||"",
+      observation: se.observations[s.id]||""
+    };
+  });
+  return {se, situs, data};
+}
+function recapCsvFilename(cls, num){ return "Recap_"+cls+"_Seance"+num+"_"+new Date().toISOString().slice(0,10)+".csv"; }
+function csvEscape(v){
+  const s = (v==null?"":String(v));
+  return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function exportRecapCSV(cls, num){
+  const {situs, data} = recapRowData(cls, num);
+  const headers = ["Nom","Prénom"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  if(num===1) headers.push("SA1 Tracé stop");
+  headers.push("Comportement","Observations");
+  const lines = [headers.map(csvEscape).join(";")];
+  data.forEach(d=>{
+    const row = [d.s.nom, d.s.prenom].concat(d.situValues);
+    if(num===1) row.push(d.sa1);
+    row.push(d.comportement, d.observation);
+    lines.push(row.map(csvEscape).join(";"));
+  });
+  const csv = "﻿"+lines.join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = recapCsvFilename(cls, num);
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function printRecap(cls, num){
+  const {situs, data} = recapRowData(cls, num);
+  const se = ensureSeance(cls, num);
+  const headCells = ["Nom","Prénom"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  if(num===1) headCells.push("SA1 Tracé stop");
+  headCells.push("Comportement","Observations");
+  const bodyRows = data.map(d=>{
+    const cells = [escHtml(d.s.nom), escHtml(d.s.prenom)].concat(d.situValues.map(v=>escHtml(v||"—")));
+    if(num===1) cells.push(escHtml(d.sa1||"—"));
+    cells.push(escHtml(d.comportement||"—"), escHtml(d.observation||""));
+    return "<tr>"+cells.map(c=>`<td>${c}</td>`).join("")+"</tr>";
+  }).join("");
+  const html = `<h1>EPS Suivi course d'orientation 4ème</h1>
+    <h2>Récapitulatif — Classe ${escHtml(cls)} — Séance ${num} ${se.date?("— "+escHtml(se.date)):""}</h2>
+    <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:12px;">
+      <thead><tr>${headCells.map(h=>`<th>${escHtml(h)}</th>`).join("")}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+  const area = document.getElementById("printArea");
+  area.innerHTML = html;
+  window.print();
+}
+function renderRecap(cls, num){
+  const {se, situs, data} = recapRowData(cls, num);
+  const situHeaders = situs.map(situ=>`<th>${SITU_LABEL[situ]}</th>`).join("") + (num===1 ? `<th>SA1 Tracé stop</th>` : "");
+  const rows = data.map((d,i)=>{
+    const s = d.s;
+    const cells = situs.map((situ,si)=>{
+      const display = d.situValues[si];
+      const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
+      const g = groupes.find(gr=>gr.memberIds.includes(s.id));
+      if(!g) return `<td><span class="hint">—</span></td>`;
       return `<td><input class="inline-text ${gradeColorClass(display)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(display!=null?display:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.${situ}.rows.${g.id}.note"></td>`;
     }).join("");
-    const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", se.sa1TraceStop[s.id]||"")}</div></td>` : "";
-    const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", se.comportement[s.id]||"");
+    const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", d.sa1)}</div></td>` : "";
+    const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", d.comportement);
     const c2 = ROW_COLORS[i % ROW_COLORS.length];
     return `<tr style="background:${c2.bg};color:${c2.text};">
       <td class="left" style="font-weight:800;">${escHtml(s.nom)}</td>
       <td class="left">${escHtml(s.prenom)}</td>
       ${cells}${sa1Cell}
       <td><div class="comport-toggles">${comportBtns}</div></td>
-      <td class="left"><input class="inline-text" type="text" style="width:160px;" placeholder="observation…" value="${escAttr(se.observations[s.id]||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.observations.${s.id}"></td>
+      <td class="left"><input class="inline-text" type="text" style="width:160px;" placeholder="observation…" value="${escAttr(d.observation)}" data-path="classes.${escAttr(cls)}.seances.s${num}.observations.${s.id}"></td>
     </tr>`;
   }).join("");
   return `
     <h2 class="ptitle">📊 Récapitulatif — Séance ${num}</h2>
+    <div class="row">
+      <button class="btn-teal" data-action="export-recap-csv" data-class="${escAttr(cls)}" data-seance="${num}">📊 Export Excel (CSV)</button>
+      <button class="btn-navy" data-action="print-recap" data-class="${escAttr(cls)}" data-seance="${num}">🖨️ Imprimer / Export PDF</button>
+    </div>
     <p class="hint">Élèves par ordre alphabétique, notes obtenues pour chaque situation de cette séance. Cliquez sur TB/S/F/I pour le comportement (re-cliquer désélectionne).</p>
     <div class="table-wrap"><table class="co recap-table">
       <thead><tr><th class="left">Nom</th><th class="left">Prénom</th>${situHeaders}<th>Comportement</th><th class="left">Observations</th></tr></thead>
@@ -1416,8 +1498,16 @@ function papillonParcoursPoints(num, p){
 }
 function papillonParcoursSuggested(num, r, p){
   const points = papillonParcoursPoints(num, p);
-  const elapsed = (p.status==="ok" && p.time && r.depart) ? (p.time-r.depart) : null;
+  const elapsed = (p.depart && p.fin) ? (p.fin-p.depart) : null;
   return papillonParcoursGrade(num, points, elapsed);
+}
+function migratePapillonRow(r){
+  ["p1","p2","p3"].forEach(k=>{
+    const p = r[k];
+    if(!p) return;
+    if((p.depart===undefined || p.depart===null) && r.depart) p.depart = r.depart;
+    if((p.fin===undefined || p.fin===null) && p.time!=null) p.fin = p.time;
+  });
 }
 function papillonParcoursEffectiveNote(num, r, p){
   if(p.note!=="" && p.note!=null) return p.note;
@@ -1433,7 +1523,7 @@ function papillonPointsAndNote(r, num){
   const suggestedNote = combined!=null ? combined : totalPoints;
   return {totalPoints, suggestedNote, rougePts};
 }
-function emptyPapillonParcours(){ return {parcoursNum:null, balises:Array.from({length:3},()=>({code:null, color:null, found:false})), status:"none", time:null, note:""}; }
+function emptyPapillonParcours(){ return {parcoursNum:null, balises:Array.from({length:3},()=>({code:null, color:null, found:false})), depart:null, fin:null, note:""}; }
 function renderPapillon(cls, num){
   const se = ensureSeance(cls,num);
   const situ = "papillon";
@@ -1443,9 +1533,13 @@ function renderPapillon(cls, num){
   applyPapillonRotation(se, Number(num));
   const rougePts = num===3 ? 15 : 10;
   const parcoursCount = papillonParcoursCount(num);
+  const departCommunBtn = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;">
+    <button class="btn-small btn-teal" data-action="depart-commun" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" title="Départ commun à tous les groupes, pour tous les parcours">🏁 Départ commun (tous les parcours)</button>
+  </div>`;
   const rows = groupes.map((g,gi)=>{
-    const r = se.papillon.rows[g.id] || {depart:null, p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""};
+    const r = se.papillon.rows[g.id] || {p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""};
     se.papillon.rows[g.id]=r;
+    migratePapillonRow(r);
     const {totalPoints, suggestedNote} = papillonPointsAndNote(r, num);
     function parcoursCell(p, pnum, pField){
       const chips = p.balises.map((b,bi)=>{
@@ -1454,16 +1548,20 @@ function renderPapillon(cls, num){
         const cls2 = b.found ? b.color : "";
         return `<span class="cell-btn ${cls2}" style="min-width:60px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
       }).join("");
-      let statusLabel = p.status==="ok"?"✔ validé":(p.status==="ko"?"✘ invalide":"en cours");
-      let statusCls = p.status==="ok"?"ok":(p.status==="ko"?"ko":"");
-      let timeHtml = (p.status==="ok" && p.time && r.depart)? `<span class="time-tag green">${fmtElapsed(p.time-r.depart)}</span>` : "";
+      const departHtml = p.depart
+        ? `<b class="time-tag">${fmtClock(p.depart)}</b>`
+        : `<button class="btn-xs btn-teal" data-action="papillon-parcours-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">Départ</button>`;
+      const finHtml = p.fin
+        ? `<b class="time-tag">${fmtClock(p.fin)}</b>`
+        : `<button class="btn-xs btn-navy" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
+      let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green">${fmtElapsed(p.fin-p.depart)}</span>` : "";
       const numLabel = (pField==="p3")
         ? `<select style="font-weight:800;margin-bottom:2px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
         : (p.parcoursNum!=null ? `<div style="font-weight:800;margin-bottom:2px;">N° ${p.parcoursNum}</div>` : "");
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
       const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:44px;text-align:center;font-weight:800;margin-top:4px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:4px;">✕</button>` : "";
-      return `${numLabel}<div>${chips}</div><div style="margin-top:4px;"><span class="cell-btn ${statusCls}" data-action="toggle-parcours-status" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">${statusLabel}${timeHtml}</span></div><div>${noteInput}${removeBtn}</div>`;
+      return `${numLabel}<div>${chips}</div><div style="margin-top:4px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div>${noteInput}${removeBtn}</div>`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
@@ -1471,7 +1569,6 @@ function renderPapillon(cls, num){
     return `<tr style="${rowColorStyle(gi)}">
       <td><b>${gi+1}</b></td>
       <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
-      <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="papillon-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td class="left">${parcoursCell(r.p1,1,"p1")}</td>
       <td class="left">${parcoursCell(r.p2,2,"p2")}</td>
       <td class="left">${p3Cell}</td>
@@ -1479,10 +1576,10 @@ function renderPapillon(cls, num){
       <td><input class="inline-text ${gradeColorClass(r.note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return top + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur une balise pour la marquer trouvée/non trouvée, puis sur « en cours » pour valider le parcours (temps affiché).
-   Chaque parcours a sa propre note suggérée (barème points + temps), modifiable manuellement ; la note finale du binôme combine les parcours réalisés, modifiable aussi. Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
+  return top + departCommunBtn + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur « Départ » puis « Fin » pour chaque parcours (temps affiché), et cliquez sur une balise pour la marquer trouvée/non trouvée.
+   Chaque parcours a son propre départ, sa fin et sa note suggérée (barème points + temps), modifiable manuellement ; la note finale du binôme combine les parcours réalisés, modifiable aussi. Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
   <div class="table-wrap"><table class="co">
-    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c4">Départ${departCommunHeaderBtn(cls,num,situ)}</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th><th class="col-c5">Points</th><th class="col-c7">Note finale</th></tr></thead>
+    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th><th class="col-c5">Points</th><th class="col-c7">Note finale</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -1557,7 +1654,7 @@ function renderScores(cls, num){
       <td>${countInput("vert")}</td>
       <td><b>${total} pts</b></td>
       <td><b>${tempsTotal}</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
+      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:55px;text-align:center;font-weight:800;" type="text" placeholder="${(!r.fin)?"Fin ?":""}" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Cliquez Départ puis Fin pour chronométrer (Entrée fait passer à la case suivante). Saisissez le nombre de balises trouvées par couleur (Bleu = 15 pts, Rouge = 10 pts, Rose = 5 pts, Vert = 3 pts) ; le score total et la note suggérée (barème points + temps) se calculent automatiquement, modifiable manuellement.</p>
@@ -1678,6 +1775,20 @@ document.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     const groupes = ensureGroupesSitu(se, situ);
     if(!groupes.length) return;
+    if(situ==="papillon"){
+      const hasExistingP = groupes.some(g=>{ const r=se.papillon.rows[g.id]; return r && ((r.p1&&r.p1.depart)||(r.p2&&r.p2.depart)||(r.p3&&r.p3.depart)); });
+      if(hasExistingP && !confirm("Certains parcours ont déjà un départ enregistré. Le remplacer par un départ commun maintenant pour tous les groupes et tous les parcours ?")) return;
+      const nowP = Date.now();
+      groupes.forEach(g=>{
+        if(!se.papillon.rows[g.id]) se.papillon.rows[g.id] = defaultRowFor("papillon", num);
+        const r = se.papillon.rows[g.id];
+        if(r.p1) r.p1.depart = nowP;
+        if(r.p2) r.p2.depart = nowP;
+        if(r.p3) r.p3.depart = nowP;
+      });
+      saveState(); renderApp();
+      return;
+    }
     const hasExisting = groupes.some(g=> se[situ].rows[g.id] && se[situ].rows[g.id].depart);
     if(hasExisting && !confirm("Certains groupes ont déjà un départ enregistré. Le remplacer par un départ commun maintenant pour tous les groupes ?")) return;
     const now = Date.now();
@@ -1762,7 +1873,6 @@ document.addEventListener("click", function(e){
     return;
   }
 
-  if(action==="papillon-depart"){ setRow("papillon",cls,num,gid,r=>{r.depart=Date.now();}); return; }
   if(action==="toggle-papillon-balise"){
     const pnum = t.dataset.parcours, bi = Number(t.dataset.index);
     setRow("papillon",cls,num,gid,r=>{
@@ -1771,14 +1881,18 @@ document.addEventListener("click", function(e){
     });
     return;
   }
-  if(action==="toggle-parcours-status"){
+  if(action==="papillon-parcours-depart"){
+    const pnum = t.dataset.parcours;
+    setRow("papillon",cls,num,gid,r=>{ const p = r["p"+pnum]; if(p) p.depart = Date.now(); });
+    return;
+  }
+  if(action==="papillon-parcours-fin"){
     const pnum = t.dataset.parcours;
     setRow("papillon",cls,num,gid,r=>{
-      if(!r.depart){ alert("Cliquez d'abord sur Départ."); return; }
       const p = r["p"+pnum];
-      if(p.status==="none"){ p.status="ok"; p.time=Date.now(); }
-      else if(p.status==="ok"){ p.status="ko"; }
-      else { p.status="none"; p.time=null; }
+      if(!p) return;
+      if(!p.depart){ alert("Cliquez d'abord sur Départ pour ce parcours."); return; }
+      p.fin = Date.now();
     });
     return;
   }
@@ -1878,6 +1992,14 @@ document.addEventListener("click", function(e){
     document.getElementById("syncToken").value = "";
     return;
   }
+  if(action==="export-recap-csv"){
+    exportRecapCSV(t.dataset.class, Number(t.dataset.seance));
+    return;
+  }
+  if(action==="print-recap"){
+    printRecap(t.dataset.class, Number(t.dataset.seance));
+    return;
+  }
   if(action==="export-backup"){
     const exportObj = { state: state, images: imageCache };
     const blob = new Blob([JSON.stringify(exportObj)], {type:"application/json"});
@@ -1929,7 +2051,7 @@ function defaultRowFor(situ, num){
   const defaults = {
     suivi: ()=>({sens:"", balises:Array.from({length:SUIVI_BALISE_CODES.length},()=>({status:"none"})), note:""}),
     etoile: ()=>({depart:null, balises:Array.from({length:ETOILE_BALISES[num]||5},()=>({status:"none",time:null})), prevu:"", note:""}),
-    papillon: ()=>({depart:null, p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""}),
+    papillon: ()=>({p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""}),
     scores: ()=>({depart:null, fin:null, parcoursZone:null, bleu:0, rouge:0, rose:0, vert:0, note:""})
   };
   return defaults[situ]();
@@ -1977,7 +2099,7 @@ document.addEventListener("change", function(e){
     } else {
       r.p3.balises = Array.from({length:3},()=>({code:null,color:null,found:false}));
     }
-    r.p3.status = "none"; r.p3.time = null;
+    r.p3.depart = null; r.p3.fin = null;
     saveState(); renderApp();
     return;
   }
