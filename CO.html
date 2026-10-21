@@ -94,7 +94,7 @@ h2.ptitle{font-size:16px;margin:0 0 10px;color:var(--navy2);}
 /* ---------- tables ---------- */
 .table-wrap{overflow-x:auto;max-width:100%;border-radius:8px;border:1px solid var(--line);}
 table.co{border-collapse:collapse;width:auto;}
-table.co th,table.co td{border:1px solid var(--line);padding:5px 9px;white-space:nowrap;font-size:12.5px;text-align:center;}
+table.co th,table.co td{border:1px solid var(--line);padding:3px 7px;white-space:nowrap;font-size:12.5px;text-align:center;}
 table.co td.left,table.co th.left{text-align:left;}
 table.co thead th{color:#fff;font-weight:700;position:sticky;top:0;}
 table.co tbody tr:nth-child(even){background:#f8fafc;}
@@ -105,7 +105,7 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .col-c9{background:#475569;}
 
 /* status cells */
-.cell-btn{display:inline-block;min-width:46px;padding:5px 6px;border-radius:6px;cursor:pointer;font-weight:700;border:1px solid #cfd8e3;background:#f1f4f8;color:#44505f;}
+.cell-btn{display:inline-block;min-width:46px;padding:3px 6px;border-radius:6px;cursor:pointer;font-weight:700;border:1px solid #cfd8e3;background:#f1f4f8;color:#44505f;}
 .cell-btn.ok{background:#e4f6ea;border-color:#1f9d55;color:#1f9d55;}
 .cell-btn.ko{background:#fde4e2;border-color:#d3332c;color:#d3332c;}
 .cell-btn.rouge{background:#fde4e2;border-color:#d3332c;color:#9c1f1a;}
@@ -1263,7 +1263,7 @@ function groupeCellHtml(cls, num, situ, g, gi){
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
     <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;font-size:15px;font-weight:700;padding:5px 11px;">${escHtml(studentShortName(s))}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:normal;max-width:150px;line-height:1.2;font-size:15px;font-weight:700;padding:4px 10px;">${escHtml(studentShortName(s))}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
@@ -1550,7 +1550,7 @@ function renderPapillon(cls, num){
       const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
-      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:6px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
