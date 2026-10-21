@@ -126,6 +126,7 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .grade-i{background:#d3332c!important;border-color:#a82822!important;color:#fff!important;}
 .time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
 .time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
+.time-tag.depart{color:#0b7a68;} .time-tag.fin{color:#6a3fd6;}
 .chip{display:inline-flex;align-items:center;gap:5px;background:#eef2f6;border-radius:20px;padding:3px 9px;font-size:11.5px;margin:2px;}
 .chip button{padding:0 4px;background:none;color:#9c1f1a;font-weight:900;font-size:12px;}
 .groupe-card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:#fbfcfe;}
@@ -799,7 +800,23 @@ function renderApp(){
 
   const html = tabBar(topTabs, uiState.top, "set-top-tab", "", 1) + `<div class="tabpanel">${panel}</div>`;
   document.getElementById("app").innerHTML = html;
+  applyStickyCols();
   requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+}
+function applyStickyCols(){
+  document.querySelectorAll(".table-wrap table").forEach(table=>{
+    const headRow = table.tHead && table.tHead.rows[0];
+    if(!headRow || headRow.cells.length<2) return;
+    const w1 = headRow.cells[0].getBoundingClientRect().width;
+    Array.prototype.forEach.call(table.rows, row=>{
+      if(row.cells.length<2) return;
+      const inHead = row.parentNode.tagName==="THEAD";
+      const c0 = row.cells[0], c1 = row.cells[1];
+      c0.style.position = "sticky"; c0.style.left = "0px"; c0.style.zIndex = inHead?"7":"4";
+      c1.style.position = "sticky"; c1.style.left = w1+"px"; c1.style.zIndex = inHead?"7":"4";
+      c1.style.boxShadow = "2px 0 4px -2px rgba(0,0,0,.35)";
+    });
+  });
 }
 
 /* ---------- Général ---------- */
@@ -1206,8 +1223,8 @@ function renderRecap(cls, num){
     const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", d.comportement);
     const c2 = ROW_COLORS[i % ROW_COLORS.length];
     return `<tr style="background:${c2.bg};color:${c2.text};">
-      <td class="left" style="font-weight:800;">${escHtml(s.nom)}</td>
-      <td class="left">${escHtml(s.prenom)}</td>
+      <td class="left" style="font-weight:800;background:${c2.bg};color:${c2.text};">${escHtml(s.nom)}</td>
+      <td class="left" style="background:${c2.bg};color:${c2.text};">${escHtml(s.prenom)}</td>
       ${cells}${sa1Cell}
       <td><div class="comport-toggles">${comportBtns}</div></td>
       <td class="left"><input class="inline-text" type="text" style="width:160px;" placeholder="observation…" value="${escAttr(d.observation)}" data-path="classes.${escAttr(cls)}.seances.s${num}.observations.${s.id}"></td>
@@ -1412,8 +1429,8 @@ function renderSuivi(cls, num){
       return `<td><span class="cell-btn ${cls2}" data-action="toggle-suivi-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}</span></td>`;
     }).join("");
     return `<tr style="${rowColorStyle(gi)}">
-      <td><b>${gi+1}</b></td>
-      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
+      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td><span class="cell-btn sens-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer le sens">${sensHtml}</span></td>
       ${balisesHtml}
       <td><b>${justes}/${nb}</b></td>
@@ -1465,8 +1482,8 @@ function renderEtoile(cls, num){
       return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span><button class="btn-xs" style="display:block;margin:2px auto 0;" data-action="edit-balise-code" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}" title="Modifier le numéro de cette balise">✏️</button></td>`;
     }).join("");
     return `<tr style="${rowColorStyle(gi)}">
-      <td><b>${gi+1}</b></td>
-      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
+      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: 59,53,47)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="etoile-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       ${balisesHtml}
@@ -1540,7 +1557,7 @@ function renderPapillon(cls, num){
     const r = se.papillon.rows[g.id] || {p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""};
     se.papillon.rows[g.id]=r;
     migratePapillonRow(r);
-    const {totalPoints, suggestedNote} = papillonPointsAndNote(r, num);
+    const {totalPoints} = papillonPointsAndNote(r, num);
     function parcoursCell(p, pnum, pField){
       const chips = p.balises.map((b,bi)=>{
         if(b.code==null) return `<span class="cell-btn" style="min-width:52px;margin:1px;">—</span>`;
@@ -1549,37 +1566,36 @@ function renderPapillon(cls, num){
         return `<span class="cell-btn ${cls2}" style="min-width:60px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
       }).join("");
       const departHtml = p.depart
-        ? `<b class="time-tag">${fmtClock(p.depart)}</b>`
-        : `<button class="btn-xs btn-teal" data-action="papillon-parcours-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">Départ</button>`;
+        ? `<b class="time-tag depart" style="font-size:14px;">${fmtClock(p.depart)}</b>`
+        : `<button class="btn-small btn-teal" style="font-size:13px;padding:5px 10px;" data-action="papillon-parcours-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}">Départ</button>`;
       const finHtml = p.fin
-        ? `<b class="time-tag">${fmtClock(p.fin)}</b>`
-        : `<button class="btn-xs btn-navy" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
-      let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green">${fmtElapsed(p.fin-p.depart)}</span>` : "";
+        ? `<b class="time-tag fin" style="font-size:14px;">${fmtClock(p.fin)}</b>`
+        : `<button class="btn-small btn-navy" style="font-size:13px;padding:5px 10px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
+      let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green" style="font-size:14px;">${fmtElapsed(p.fin-p.depart)}</span>` : "";
       const numLabel = (pField==="p3")
-        ? `<select style="font-weight:800;margin-bottom:2px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
-        : (p.parcoursNum!=null ? `<div style="font-weight:800;margin-bottom:2px;">N° ${p.parcoursNum}</div>` : "");
+        ? `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
+        : (p.parcoursNum!=null ? `<div style="font-weight:800;font-size:15px;margin-bottom:4px;">N° ${p.parcoursNum}</div>` : "");
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
-      const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:44px;text-align:center;font-weight:800;margin-top:4px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
-      const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:4px;">✕</button>` : "";
-      return `${numLabel}<div>${chips}</div><div style="margin-top:4px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div>${noteInput}${removeBtn}</div>`;
+      const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;margin-top:6px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
+      const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:6px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div>${noteInput}${removeBtn}</div>`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
       : `<button class="btn-xs btn-teal" data-action="add-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">➕ Parcours optionnel</button>`;
     return `<tr style="${rowColorStyle(gi)}">
-      <td><b>${gi+1}</b></td>
-      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
+      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td class="left">${parcoursCell(r.p1,1,"p1")}</td>
       <td class="left">${parcoursCell(r.p2,2,"p2")}</td>
       <td class="left">${p3Cell}</td>
-      <td><b>${totalPoints} pts</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
+      <td><b style="font-size:15px;">${totalPoints} pts</b></td>
     </tr>`;
   }).join("");
   return top + departCommunBtn + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur « Départ » puis « Fin » pour chaque parcours (temps affiché), et cliquez sur une balise pour la marquer trouvée/non trouvée.
-   Chaque parcours a son propre départ, sa fin et sa note suggérée (barème points + temps), modifiable manuellement ; la note finale du binôme combine les parcours réalisés, modifiable aussi. Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
+   Chaque parcours a son propre départ, sa fin et sa note (barème points + temps, modifiable). Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
   <div class="table-wrap"><table class="co">
-    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th><th class="col-c5">Points</th><th class="col-c7">Note finale</th></tr></thead>
+    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th><th class="col-c5">Points</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -1643,8 +1659,8 @@ function renderScores(cls, num){
     const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
     const countInput = (color)=>`<input class="note-input scores-count-input" type="number" min="0" step="1" value="${escAttr(r[color]!=null?r[color]:0)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.${color}">`;
     return `<tr style="${rowColorStyle(gi)}">
-      <td><b>${gi+1}</b></td>
-      <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
+      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td><span class="cell-btn" style="font-weight:800;" data-action="toggle-scores-zone" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer de parcours">${zoneLabel}</span></td>
       <td>${r.depart? fmtClock(r.depart) : `<button class="btn-small btn-teal" data-action="scores-depart" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">Départ</button>`}</td>
       <td>${r.fin? fmtClock(r.fin) : `<button class="btn-small btn-navy" data-action="scores-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" ${!r.depart?"disabled":""}>Fin</button>`}</td>
