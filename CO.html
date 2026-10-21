@@ -956,6 +956,58 @@ const PAPILLON_BALISES_S3 = {
   5:[{c:41,col:"verte"},{c:16,col:"rouge"},{c:12,col:"rouge"}],
   6:[{c:42,col:"verte"},{c:8,col:"rouge"},{c:15,col:"rouge"}]
 };
+/* Barème Papillon séance 2 (document fourni) : note pour UN parcours (3 balises),
+   selon points obtenus (2R+1V=25, 2R=20, 1R+1V=15, 1R=10, 1V=5) et temps mis (en minutes). */
+const PAPILLON_BAREME_S2_TIME_COLS = [18,21,24,27,30];
+const PAPILLON_BAREME_S2_GRID = {
+  25:["TB","TB","S","S","S"],
+  20:["TB","S","S","F","F"],
+  15:["S","S","S","F","F"],
+  10:["S","F","F","F","F"],
+  5: ["F","F","F","I","I"]
+};
+/* Barème Papillon séance 3 (document fourni) : grille en couleurs (sans chiffre), mappée sur
+   l'échelle TB/S/F/I déjà utilisée ailleurs (vert foncé=TB, vert clair=S, jaune=F, rouge=I). */
+const PAPILLON_BAREME_S3_TIME_COLS = [20,22,24,26,28,30];
+const PAPILLON_BAREME_S3_GRID = {
+  35:["TB","TB","S","F","F","I"],
+  30:["TB","S","S","F","F","I"],
+  20:["S","S","S","F","F","I"],
+  15:["F","F","F","F","F","I"],
+  5: ["I","I","I","I","I","I"]
+};
+const GRADE_RANK = {TB:4,S:3,F:2,I:1};
+const RANK_GRADE = {4:"TB",3:"S",2:"F",1:"I"};
+function combineLetterGrades(g1,g2){
+  if(g1==null && g2==null) return null;
+  if(g1==null) return g2;
+  if(g2==null) return g1;
+  const avg = Math.round((GRADE_RANK[g1]+GRADE_RANK[g2])/2);
+  return RANK_GRADE[avg] || g1;
+}
+function papillonParcoursGrade(num, points, elapsedMs){
+  if(elapsedMs==null || points<=0) return null;
+  const minutes = elapsedMs/60000;
+  if(num===2){
+    const grid = PAPILLON_BAREME_S2_GRID, cols = PAPILLON_BAREME_S2_TIME_COLS, keys = [25,20,15,10,5];
+    let rowKey = null;
+    for(const k of keys){ if(points>=k){ rowKey=k; break; } }
+    if(rowKey==null) return null;
+    let colIdx = cols.findIndex(t=>minutes<=t);
+    if(colIdx===-1) colIdx = cols.length-1;
+    return grid[rowKey][colIdx];
+  }
+  if(num===3){
+    const grid = PAPILLON_BAREME_S3_GRID, cols = PAPILLON_BAREME_S3_TIME_COLS, keys = [35,30,20,15,5];
+    let rowKey = null;
+    for(const k of keys){ if(points>=k){ rowKey=k; break; } }
+    if(rowKey==null) return null;
+    let colIdx = cols.findIndex(t=>minutes<=t);
+    if(colIdx===-1) colIdx = cols.length-1;
+    return grid[rowKey][colIdx];
+  }
+  return null;
+}
 function papillonParcoursCount(num){ return num===2?12:(num===3?6:0); }
 function papillonBaliseMap(num){ return num===2?PAPILLON_BALISES_S2:(num===3?PAPILLON_BALISES_S3:null); }
 function applyPapillonRotation(se, num){
@@ -1062,8 +1114,15 @@ function renderRecap(cls, num){
       const g = groupes.find(gr=>gr.memberIds.includes(s.id));
       if(!g) return `<td><span class="hint">—</span></td>`;
       if(!se[situ].rows[g.id]) se[situ].rows[g.id] = defaultRowFor(situ, num);
-      const note = se[situ].rows[g.id].note;
-      return `<td><input class="inline-text ${gradeColorClass(note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(note!=null?note:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.${situ}.rows.${g.id}.note"></td>`;
+      const row = se[situ].rows[g.id];
+      let display = row.note;
+      if(display==="" || display==null){
+        if(situ==="suivi") display = suggestedNoteSuivi(row);
+        else if(situ==="etoile") display = suggestedNoteEtoile(row, num, ETOILE_BALISES[num]||5);
+        else if(situ==="papillon") display = papillonPointsAndNote(row, num).suggestedNote;
+        else if(situ==="scores") display = scoresPointsAndNote(row).suggestedNote;
+      }
+      return `<td><input class="inline-text ${gradeColorClass(display)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(display!=null?display:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.${situ}.rows.${g.id}.note"></td>`;
     }).join("");
     const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", se.sa1TraceStop[s.id]||"")}</div></td>` : "";
     const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", se.comportement[s.id]||"");
@@ -1209,6 +1268,47 @@ function gradeFromCount(count, bands){
   for(let i=0;i<bands.length;i++){ if(count>=bands[i][0]) return bands[i][1]; }
   return bands[bands.length-1][1];
 }
+function suggestedNoteSuivi(r){
+  const justes = r.balises.filter(b=>b.status==="ok").length;
+  return gradeFromCount(justes, SUIVI_GRADE_BANDS);
+}
+/* Barème Parcours Étoile séance 2 (document fourni) : grille en couleurs croisant balises justes
+   et temps total (max 1h30), mappée sur l'échelle TB/S/F/I. */
+const ETOILE_S2_BAREME_TIME_COLS = [60,70,80,90];
+const ETOILE_S2_BAREME_GRID = {
+  8:["TB","TB","TB","S"],
+  7:["TB","TB","S","S"],
+  6:["S","S","S","S"],
+  5:["S","S","S","F"],
+  4:["S","F","F","F"],
+  3:["F","F","F","F"],
+  2:["F","F","I","I"],
+  1:["I","I","I","I"]
+};
+function etoileS2Grade(nbTrouvees, elapsedMs){
+  if(elapsedMs==null) return null;
+  const minutes = elapsedMs/60000;
+  const keys = [8,7,6,5,4,3,2,1];
+  let rowKey = null;
+  for(const k of keys){ if(nbTrouvees>=k){ rowKey=k; break; } }
+  if(rowKey==null) rowKey = 1;
+  const cols = ETOILE_S2_BAREME_TIME_COLS;
+  let colIdx = cols.findIndex(t=>minutes<=t);
+  if(colIdx===-1) colIdx = cols.length-1;
+  return ETOILE_S2_BAREME_GRID[rowKey][colIdx];
+}
+function suggestedNoteEtoile(r, num, nb){
+  const nbTrouvees = r.balises.filter(b=>b.status==="ok").length;
+  if(num===1) return gradeFromCount(nbTrouvees, ETOILE_S1_GRADE_BANDS);
+  if(num===2){
+    const okTimes = r.balises.filter(b=>b.status==="ok" && b.time).map(b=>b.time);
+    const lastOk = okTimes.length ? Math.max(...okTimes) : null;
+    const elapsedMs = (r.depart && lastOk) ? (lastOk-r.depart) : null;
+    const g = etoileS2Grade(nbTrouvees, elapsedMs);
+    return g!=null ? g : nbTrouvees;
+  }
+  return Math.round((nbTrouvees/nb)*20*10)/10;
+}
 function renderSuivi(cls, num){
   const se = ensureSeance(cls,num);
   const situ = "suivi";
@@ -1222,7 +1322,7 @@ function renderSuivi(cls, num){
     if(!r.balises || r.balises.length!==nb){ r.balises = Array.from({length:nb},(_,i)=> r.balises&&r.balises[i] ? r.balises[i] : ({status:"none"})); }
     se.suivi.rows[g.id]=r;
     const justes = r.balises.filter(b=>b.status==="ok").length;
-    const suggestedNote = gradeFromCount(justes, SUIVI_GRADE_BANDS);
+    const suggestedNote = suggestedNoteSuivi(r);
     const sensHtml = r.sens==="aller" ? "→" : (r.sens==="retour" ? "←" : (gi%2===0?"→":"←"));
     const balisesHtml = r.balises.map((b,bi)=>{
       const cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":(b.status==="partial"?"partial":""));
@@ -1269,7 +1369,7 @@ function renderEtoile(cls, num){
     const lastOk = okTimes.length? Math.max(...okTimes) : null;
     const totalMs = (r.depart && lastOk) ? (lastOk-r.depart) : null;
     const totalColor = (totalMs!=null && maxTotalMs && totalMs>maxTotalMs) ? "red" : (totalMs!=null?"green":"");
-    const suggestedNote = num===1 ? gradeFromCount(nbTrouvees, ETOILE_S1_GRADE_BANDS) : Math.round((nbTrouvees/nb)*20*10)/10;
+    const suggestedNote = suggestedNoteEtoile(r, num, nb);
     const balisesHtml = r.balises.map((b,bi)=>{
       const code = prevuCodes[bi] || "";
       let cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":"");
@@ -1294,7 +1394,7 @@ function renderEtoile(cls, num){
     </tr>`;
   }).join("");
   return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
-  ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min. La note suggérée est calculée sur 20, modifiez-la selon le barème (photo)." : " Barème : 5 balises trouvées = TB, 3-4 = S, 1-2 = F, 0 = I. Note modifiable manuellement."}</p>
+  ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min. La note suggérée applique automatiquement le barème (balises justes + temps total)." : " Barème : 5 balises trouvées = TB, 3-4 = S, 1-2 = F, 0 = I. Note modifiable manuellement."}</p>
   <div class="table-wrap"><table class="co">
     <thead><tr>
       <th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c8 left">Parcours prévu</th><th class="col-c4">Départ${departCommunHeaderBtn(cls,num,situ)}</th>
@@ -1304,6 +1404,18 @@ function renderEtoile(cls, num){
 }
 
 /* ---- Parcours Papillon (séance 2 et 3) ---- */
+function papillonPointsAndNote(r, num){
+  const rougePts = num===3 ? 15 : 10;
+  const ptVal = b => b.color==="rouge"?rougePts:(b.color==="verte"?5:0);
+  const points = p=>p.balises.reduce((s,b)=> s + (b.found ? ptVal(b) : 0),0);
+  const totalPoints = points(r.p1)+points(r.p2);
+  const elapsedFor = p => (p.status==="ok" && p.time && r.depart) ? (p.time-r.depart) : null;
+  const g1 = papillonParcoursGrade(num, points(r.p1), elapsedFor(r.p1));
+  const g2 = papillonParcoursGrade(num, points(r.p2), elapsedFor(r.p2));
+  const combined = combineLetterGrades(g1,g2);
+  const suggestedNote = combined!=null ? combined : totalPoints;
+  return {totalPoints, suggestedNote, rougePts};
+}
 function renderPapillon(cls, num){
   const se = ensureSeance(cls,num);
   const situ = "papillon";
@@ -1316,14 +1428,12 @@ function renderPapillon(cls, num){
   const rows = groupes.map((g,gi)=>{
     const r = se.papillon.rows[g.id] || {depart:null, p1:{parcoursNum:null, balises:emptyBalises(), status:"none", time:null}, p2:{parcoursNum:null, balises:emptyBalises(), status:"none", time:null}, note:""};
     se.papillon.rows[g.id]=r;
-    const ptVal = b => b.color==="rouge"?rougePts:(b.color==="verte"?5:0);
-    const points = p=>p.balises.reduce((s,b)=> s + (b.found ? ptVal(b) : 0),0);
-    const totalPoints = points(r.p1)+points(r.p2);
+    const {totalPoints, suggestedNote} = papillonPointsAndNote(r, num);
     function parcoursCell(p, pnum){
       const chips = p.balises.map((b,bi)=>{
         if(b.code==null) return `<span class="cell-btn" style="min-width:52px;margin:1px;">—</span>`;
         const label = (b.found?"✔ ":"")+b.code+" ("+(b.color==="rouge"?rougePts:5)+")";
-        const cls2 = b.found ? b.color : "rate";
+        const cls2 = b.found ? b.color : "";
         return `<span class="cell-btn ${cls2}" style="min-width:60px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
       }).join("");
       let statusLabel = p.status==="ok"?"✔ validé":(p.status==="ko"?"✘ invalide":"en cours");
@@ -1339,10 +1449,11 @@ function renderPapillon(cls, num){
       <td class="left">${parcoursCell(r.p1,1)}</td>
       <td class="left">${parcoursCell(r.p2,2)}</td>
       <td><b>${totalPoints} pts</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:totalPoints)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
+      <td><input class="inline-text ${gradeColorClass(r.note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return top + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur une balise pour la marquer trouvée/non trouvée. Cliquez sur « en cours » pour valider/invalider le parcours entier (le temps s'affiche à la validation).</p>
+  return top + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur une balise pour la marquer trouvée/non trouvée, puis sur « en cours » pour valider le parcours (temps affiché).
+   La note suggérée (TB/S/F/I) applique automatiquement le barème (points + temps par parcours), modifiable manuellement.</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c4">Départ${departCommunHeaderBtn(cls,num,situ)}</th><th class="col-c1 left">Parcours 1 (3 balises)</th><th class="col-c2 left">Parcours 2 (3 balises)</th><th class="col-c5">Points</th><th class="col-c7">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -1350,6 +1461,48 @@ function renderPapillon(cls, num){
 
 /* ---- Course aux scores (séance 3) ---- */
 const SCORES_POINTS = {bleu:15, rouge:10, rose:5, vert:3};
+/* Barème Course aux scores séance 3 (document fourni) : grille en couleurs croisant points totaux
+   et temps total, mappée sur l'échelle TB/S/F/I. Lecture minutieuse d'une grande grille (18×11) :
+   à vérifier ponctuellement en situation réelle. */
+const SCORES_BAREME_TIME_COLS = [40,42,44,46,48,50,52,54,56,58,60];
+const SCORES_BAREME_GRID = {
+  145:["TB","TB","TB","S","S","S","S","S","S","F","F"],
+  140:["TB","TB","S","S","S","S","S","S","F","F","F"],
+  135:["TB","S","S","S","S","S","S","F","F","F","F"],
+  130:["S","S","S","S","S","S","F","F","F","F","F"],
+  125:["S","S","S","S","S","F","F","F","F","F","F"],
+  120:["S","S","S","S","F","F","F","F","F","F","F"],
+  115:["S","S","S","F","F","F","F","F","F","F","I"],
+  110:["S","S","F","F","F","F","F","F","F","I","I"],
+  100:["S","S","F","F","F","F","F","F","F","I","I"],
+  90: ["F","F","F","F","F","F","F","F","F","I","I"],
+  80: ["F","F","F","F","F","I","I","I","I","I","I"],
+  70: ["F","F","F","F","I","I","I","I","I","I","I"],
+  60: ["F","F","F","I","I","I","I","I","I","I","I"],
+  50: ["F","F","I","I","I","I","I","I","I","I","I"],
+  40: ["F","I","I","I","I","I","I","I","I","I","I"],
+  30: ["F","I","I","I","I","I","I","I","I","I","I"],
+  20: ["I","I","I","I","I","I","I","I","I","I","I"],
+  10: ["I","I","I","I","I","I","I","I","I","I","I"]
+};
+function scoresGrade(points, elapsedMs){
+  if(elapsedMs==null || points<=0) return null;
+  const minutes = elapsedMs/60000;
+  const keys = [145,140,135,130,125,120,115,110,100,90,80,70,60,50,40,30,20,10];
+  let rowKey = null;
+  for(const k of keys){ if(points>=k){ rowKey=k; break; } }
+  if(rowKey==null) rowKey = 10;
+  const cols = SCORES_BAREME_TIME_COLS;
+  let colIdx = cols.findIndex(t=>minutes<=t);
+  if(colIdx===-1) colIdx = cols.length-1;
+  return SCORES_BAREME_GRID[rowKey][colIdx];
+}
+function scoresPointsAndNote(r){
+  const total = (Number(r.bleu)||0)*SCORES_POINTS.bleu + (Number(r.rouge)||0)*SCORES_POINTS.rouge + (Number(r.rose)||0)*SCORES_POINTS.rose + (Number(r.vert)||0)*SCORES_POINTS.vert;
+  const elapsedMs = (r.depart && r.fin) ? (r.fin-r.depart) : null;
+  const grade = scoresGrade(total, elapsedMs);
+  return {total, suggestedNote: grade!=null ? grade : ""};
+}
 function renderScores(cls, num){
   const se = ensureSeance(cls,num);
   const situ = "scores";
@@ -1362,9 +1515,9 @@ function renderScores(cls, num){
     se.scores.rows[g.id]=r;
     const zone = r.parcoursZone || (gi%2===0?"parilly":"balme");
     const zoneLabel = zone==="parilly" ? "Parilly Sud" : "La Balme";
-    const total = (Number(r.bleu)||0)*SCORES_POINTS.bleu + (Number(r.rouge)||0)*SCORES_POINTS.rouge + (Number(r.rose)||0)*SCORES_POINTS.rose + (Number(r.vert)||0)*SCORES_POINTS.vert;
+    const {total, suggestedNote} = scoresPointsAndNote(r);
     const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
-    const countInput = (color)=>`<input class="note-input" type="number" min="0" step="1" value="${escAttr(r[color]!=null?r[color]:0)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.${color}">`;
+    const countInput = (color)=>`<input class="note-input scores-count-input" type="number" min="0" step="1" value="${escAttr(r[color]!=null?r[color]:0)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.${color}">`;
     return `<tr style="${rowColorStyle(gi)}">
       <td><b>${gi+1}</b></td>
       <td class="left">${groupeCellHtml(cls,num,situ,g,gi)}</td>
@@ -1377,10 +1530,10 @@ function renderScores(cls, num){
       <td>${countInput("vert")}</td>
       <td><b>${total} pts</b></td>
       <td><b>${tempsTotal}</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!=null?r.note:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
+      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return top + `<p class="hint">Cliquez Départ puis Fin pour chronométrer. Saisissez le nombre de balises trouvées par couleur (Bleu = 15 pts, Rouge = 10 pts, Rose = 5 pts, Vert = 3 pts) ; le score total se calcule automatiquement.</p>
+  return top + `<p class="hint">Cliquez Départ puis Fin pour chronométrer (Entrée fait passer à la case suivante). Saisissez le nombre de balises trouvées par couleur (Bleu = 15 pts, Rouge = 10 pts, Rose = 5 pts, Vert = 3 pts) ; le score total et la note suggérée (barème points + temps) se calculent automatiquement, modifiable manuellement.</p>
   <div class="table-wrap"><table class="co">
     <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c4">Parcours</th><th class="col-c7">Départ${departCommunHeaderBtn(cls,num,situ)}</th><th class="col-c8">Fin</th><th class="col-c1">Bleu (15)</th><th class="col-c6">Rouge (10)</th><th class="col-c2">Rose (5)</th><th class="col-c3">Vert (3)</th><th class="col-c5">Points totaux</th><th class="col-c9">Temps</th><th class="col-c0">Note</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -1397,8 +1550,12 @@ function renderCartesPanel(){
     <div class="img-grid" style="margin-top:10px;">
       ${imgs.map((it,i)=>`
         <div class="img-card">${docThumbHtml(it.imgId)}
-          <div class="cap"><input class="inline-text" style="width:70%;" type="text" value="${escAttr(it.label)}" data-path="cartes.${i}.label">
-          <button class="btn-xs btn-danger" data-action="delete-image" data-target="cartes" data-index="${i}">✕</button></div>
+          <div class="cap"><input class="inline-text" style="width:55%;" type="text" value="${escAttr(it.label)}" data-path="cartes.${i}.label">
+          <span style="display:flex;gap:2px;">
+            <button class="btn-xs" data-action="move-carte" data-dir="-1" data-index="${i}" title="Monter" ${i===0?"disabled":""}>⬆️</button>
+            <button class="btn-xs" data-action="move-carte" data-dir="1" data-index="${i}" title="Descendre" ${i===imgs.length-1?"disabled":""}>⬇️</button>
+            <button class="btn-xs btn-danger" data-action="delete-image" data-target="cartes" data-index="${i}">✕</button>
+          </span></div>
         </div>`).join("") || "<div class=\"empty\">Aucune carte ajoutée.</div>"}
     </div>
   `;
@@ -1629,6 +1786,14 @@ document.addEventListener("click", function(e){
     setRow("scores",cls,num,gid,r=>{ r.parcoursZone = (r.parcoursZone==="parilly") ? "balme" : "parilly"; });
     return;
   }
+  if(action==="move-carte"){
+    const i = Number(t.dataset.index), dir = Number(t.dataset.dir);
+    const j = i+dir;
+    if(j<0 || j>=state.cartes.length) return;
+    const tmp = state.cartes[i]; state.cartes[i] = state.cartes[j]; state.cartes[j] = tmp;
+    saveState(); renderApp();
+    return;
+  }
   if(action==="upload-image"){ return; } /* handled by change */
   if(action==="delete-image"){
     const target = t.dataset.target, i = Number(t.dataset.index);
@@ -1710,7 +1875,20 @@ function closeLightbox(){
   document.getElementById("lightbox").style.display = "none";
   document.getElementById("lightboxImg").src = "";
 }
-document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeLightbox(); });
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape"){ closeLightbox(); return; }
+  if(e.key==="Enter" && e.target.classList && e.target.classList.contains("scores-count-input")){
+    e.preventDefault();
+    const inputs = Array.prototype.slice.call(document.querySelectorAll(".scores-count-input"));
+    const idx = inputs.indexOf(e.target);
+    if(idx>=0 && idx<inputs.length-1){
+      inputs[idx+1].focus();
+      inputs[idx+1].select();
+    } else {
+      e.target.blur();
+    }
+  }
+});
 
 function defaultRowFor(situ, num){
   const defaults = {
