@@ -66,7 +66,7 @@ main#app{max-width:1600px;margin:14px auto 60px;padding:0 12px;}
 .tabbar.lvl1 .tabbtn.class-tab{color:#fff;}
 .tabbar.lvl1 .tabbtn.class-tab.active{box-shadow:inset 0 -4px 0 rgba(255,255,255,.9);filter:brightness(1.08);}
 .tabbar.lvl2{border-bottom:3px solid var(--accent2);margin-top:14px;}
-.tabbar.lvl2 .tabbtn{font-size:12.5px;padding:7px 14px;}
+.tabbar.lvl2 .tabbtn{font-size:16px;padding:9px 18px;}
 .tabbar.lvl2 .tabbtn.active{background:var(--accent2);color:#07332c;}
 .tabbar.lvl3{border-bottom:3px solid var(--accent);margin-top:12px;}
 .tabbar.lvl3 .tabbtn{font-size:12px;padding:6px 12px;}
@@ -844,42 +844,13 @@ function renderGeneralPanel(){
 
 /* ---------- Classe ---------- */
 function renderClassPanel(cls){
-  const c = ensureClass(cls);
-  const subTabs = [{id:"eleves", label:"👥 Élèves", badge:c.students.length}, {id:"s1", label:"Séance 1"}, {id:"s2", label:"Séance 2"}, {id:"s3", label:"Séance 3"}];
-  const active = uiState.classTab[cls] || "eleves";
-  if(!subTabs.some(t=>t.id===active)) uiState.classTab[cls]="eleves";
-  const activeFinal = uiState.classTab[cls] || "eleves";
-  let body;
-  if(activeFinal==="eleves") body = renderRosterBody(cls);
-  else body = renderSeancePanel(cls, Number(activeFinal.slice(1)));
+  ensureClass(cls);
+  const subTabs = [{id:"s1", label:"Séance 1"}, {id:"s2", label:"Séance 2"}, {id:"s3", label:"Séance 3"}];
+  const active = uiState.classTab[cls] || "s1";
+  if(!subTabs.some(t=>t.id===active)) uiState.classTab[cls]="s1";
+  const activeFinal = uiState.classTab[cls] || "s1";
+  const body = renderSeancePanel(cls, Number(activeFinal.slice(1)));
   return tabBar(subTabs, activeFinal, "set-class-tab", `data-class="${escAttr(cls)}"`, 2) + `<div class="tabpanel" style="box-shadow:none;">${body}</div>`;
-}
-
-function twoColTable(headHtml, items, rowFn, colspan, emptyMsg){
-  if(!items.length){
-    return `<div class="table-wrap"><table class="co"><thead><tr>${headHtml}</tr></thead>
-      <tbody><tr><td colspan="${colspan}" class="empty">${emptyMsg}</td></tr></tbody></table></div>`;
-  }
-  const mid = Math.ceil(items.length/2);
-  const cols = [items.slice(0,mid), items.slice(mid)].filter(c=>c.length);
-  const build = (list)=>`<div class="table-wrap" style="flex:1 1 280px;"><table class="co">
-    <thead><tr>${headHtml}</tr></thead>
-    <tbody>${list.map(rowFn).join("")}</tbody>
-  </table></div>`;
-  return `<div class="row" style="align-items:flex-start;flex-wrap:wrap;">${cols.map(build).join("")}</div>`;
-}
-
-function renderRosterBody(cls){
-  const c = state.classes[cls];
-  const rowFn = (s)=>`<tr>
-      <td class="left col-c0" style="color:#fff;">${escHtml(s.nom)}</td>
-      <td class="left">${escHtml(s.prenom)}</td>
-    </tr>`;
-  return `
-    <h2 class="ptitle">👥 Liste des élèves de la classe</h2>
-    <p class="hint">Les absences et dispenses se renseignent séance par séance, directement dans chaque onglet Séance.</p>
-    ${twoColTable(`<th class="col-c0 left">Nom</th><th class="col-c1 left">Prénom</th>`, c.students, rowFn, 2, "Aucun élève — importez la liste dans l'onglet Général.")}
-  `;
 }
 
 function renderPresence(cls, num){
@@ -1292,7 +1263,7 @@ function groupeCellHtml(cls, num, situ, g, gi){
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
     <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;">${escHtml(studentShortName(s))}
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;font-size:15px;font-weight:700;padding:5px 11px;">${escHtml(studentShortName(s))}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
@@ -1557,7 +1528,6 @@ function renderPapillon(cls, num){
     const r = se.papillon.rows[g.id] || {p1:emptyPapillonParcours(), p2:emptyPapillonParcours(), note:""};
     se.papillon.rows[g.id]=r;
     migratePapillonRow(r);
-    const {totalPoints} = papillonPointsAndNote(r, num);
     function parcoursCell(p, pnum, pField){
       const chips = p.balises.map((b,bi)=>{
         if(b.code==null) return `<span class="cell-btn" style="min-width:52px;margin:1px;">—</span>`;
@@ -1576,9 +1546,11 @@ function renderPapillon(cls, num){
         ? `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
         : (p.parcoursNum!=null ? `<div style="font-weight:800;font-size:15px;margin-bottom:4px;">N° ${p.parcoursNum}</div>` : "");
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
-      const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;margin-top:6px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
+      const pPoints = papillonParcoursPoints(num, p);
+      const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
+      const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
-      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:6px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div>${noteInput}${removeBtn}</div>`;
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:6px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
@@ -1589,13 +1561,12 @@ function renderPapillon(cls, num){
       <td class="left">${parcoursCell(r.p1,1,"p1")}</td>
       <td class="left">${parcoursCell(r.p2,2,"p2")}</td>
       <td class="left">${p3Cell}</td>
-      <td><b style="font-size:15px;">${totalPoints} pts</b></td>
     </tr>`;
   }).join("");
   return top + departCommunBtn + `<p class="hint">30 min maximum. Balise Rouge = ${rougePts} pts, Verte = 5 pts (préremplies selon le N° de parcours). Cliquez sur « Départ » puis « Fin » pour chaque parcours (temps affiché), et cliquez sur une balise pour la marquer trouvée/non trouvée.
-   Chaque parcours a son propre départ, sa fin et sa note (barème points + temps, modifiable). Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
+   Chaque parcours a son propre départ, sa fin, ses points et sa note (barème points + temps, modifiable). Un parcours optionnel (3ème) peut être ajouté si besoin.</p>
   <div class="table-wrap"><table class="co">
-    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th><th class="col-c5">Points</th></tr></thead>
+    <thead><tr><th class="col-c9">N°</th><th class="col-c0">Groupe</th><th class="col-c1 left">Parcours 1</th><th class="col-c2 left">Parcours 2</th><th class="col-c6 left">Parcours optionnel</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
