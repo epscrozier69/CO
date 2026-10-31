@@ -123,6 +123,7 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .cell-btn.verte{background:#dff3e6;border-color:#1f9d55;color:#116b36;}
 .cell-btn.rate{background:#eceff2;border-color:#9aa6b3;color:#6b7684;text-decoration:line-through;}
 .cell-btn.partial{background:#fdf0e0;border-color:#e08c00;color:#8a5600;}
+.cell-btn.pending{background:#fff;border:3px solid #2563eb;color:#1a4fc4;box-shadow:0 0 0 2px #2563eb33;}
 .sens-btn{font-size:26px;font-weight:900;min-width:44px;padding:6px 10px;}
 .recap-table{border-radius:10px;overflow:hidden;}
 .recap-table thead th{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 70%,#1b3550 100%);color:#fff;font-weight:700;border:none;padding:11px 14px;}
@@ -565,7 +566,12 @@ function syncOnLoad(){
     remoteSha = res.sha;
     const data = res.data;
     const lastLocalSyncAt = Number(localStorage.getItem(SYNC_LAST_AT_KEY)||0);
+    const hasLocalData = Object.keys(state.classes||{}).some(function(c){ return ((state.classes[c]||{}).students||[]).length>0; });
     if(data && data.updatedAt && data.updatedAt > lastLocalSyncAt){
+      if(lastLocalSyncAt===0 && hasLocalData){
+        const replaceLocal = confirm("Cet appareil contient déjà des données locales qui n'ont jamais été synchronisées, et une version différente existe sur GitHub.\n\nOK = remplacer les données de CET APPAREIL par celles de GitHub (vos données locales non envoyées seront perdues).\nAnnuler = garder les données de cet appareil et les envoyer vers GitHub (la version actuelle sur GitHub sera remplacée).");
+        if(!replaceLocal){ updateSyncStatusUI("loading"); return doGithubPush(); }
+      }
       state = data.state || defaultState();
       normalizeState(state);
       const newImages = data.images || {};
@@ -1473,10 +1479,11 @@ function renderEtoile(cls, num){
     const suggestedNote = suggestedNoteEtoile(r, num, nb);
     const balisesHtml = r.balises.map((b,bi)=>{
       const code = prevuCodes[bi] || "";
-      let cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":"");
+      let cls2 = b.status==="ok"?"ok":(b.status==="ko"?"ko":(b.status==="pending"?"pending":""));
       let inner = code || "—";
       if(b.status==="ok") inner = "✔ "+(code||"");
       else if(b.status==="ko") inner = "✘ "+(code||"");
+      else if(b.status==="pending") inner = "◯ "+(code||"");
       let timeTag = "";
       if(b.status==="ok" && b.time && r.depart){
         const dms = b.time-r.depart; timeTag = `<span class="time-tag ${delayClass(dms)}">${fmtElapsed(dms)}</span>`;
@@ -1494,7 +1501,7 @@ function renderEtoile(cls, num){
       <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:50px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.note"></td>
     </tr>`;
   }).join("");
-  return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ✔ (validée, temps affiché) → ✘ (non validée) → —.
+  return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ◯ (balise en cours, pour pointer celle visée même hors ordre) → ✔ (validée, temps affiché) → ✘ (non validée) → —.
   ${num===2? " Durée totale max : 1h30. Temps max conseillé par balise : 25 min. La note suggérée applique automatiquement le barème (balises justes + temps total)." : " Barème : 5 balises trouvées = TB, 3-4 = S, 1-2 = F, 0 = I. Note modifiable manuellement."}</p>
   <div class="table-wrap"><table class="co">
     <thead><tr>
@@ -1868,7 +1875,8 @@ document.addEventListener("click", function(e){
     setRow("etoile",cls,num,gid,r=>{
       if(!r.depart){ alert("Cliquez d'abord sur Départ."); return; }
       const b = r.balises[bi];
-      if(b.status==="none"){ b.status="ok"; b.time=Date.now(); }
+      if(b.status==="none"){ b.status="pending"; }
+      else if(b.status==="pending"){ b.status="ok"; b.time=Date.now(); }
       else if(b.status==="ok"){ b.status="ko"; }
       else { b.status="none"; b.time=null; }
     });
