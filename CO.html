@@ -636,8 +636,11 @@ function studentById(cls, id){
 }
 function studentShortName(s){
   if(!s) return "?";
-  const nomFirst = (s.nom||"").trim().split(/\s+/)[0] || "";
-  return [s.prenom, nomFirst].filter(Boolean).join(" ") || "?";
+  const nom = (s.nom||"").trim().toUpperCase();
+  return [nom, s.prenom].filter(Boolean).join(" ") || "?";
+}
+function sortStudentsAlpha(students){
+  students.sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
 }
 function sortMemberIdsByRoster(cls, memberIds){
   const roster = (state.classes[cls] && state.classes[cls].students) || [];
@@ -767,6 +770,7 @@ function applyAutoImportRows(headerCells, rows){
     const dup = c.students.find(s=>normalize(s.nom)===normalize(nom) && normalize(s.prenom)===normalize(prenom));
     if(!dup){ c.students.push({id:uid(), nom, prenom}); counts[key]=(counts[key]||0)+1; }
   });
+  Object.keys(counts).forEach(key=>sortStudentsAlpha(state.classes[key].students));
   return counts;
 }
 function finishImport(counts){
