@@ -266,8 +266,15 @@ function defaultState(){
   return { classes:{}, cartes:[], bareme:{} };
 }
 function loadState(){
-  try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw){ const s = JSON.parse(raw); normalizeState(s); return s; } }catch(e){}
   return defaultState();
+}
+function normalizeState(s){
+  if(!s || !s.classes) return;
+  Object.keys(s.classes).forEach(key=>{
+    const c = s.classes[key];
+    if(c && Array.isArray(c.students)) sortStudentsAlpha(c.students);
+  });
 }
 function saveState(skipSync){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ alert("Attention : sauvegarde locale impossible (stockage plein). Exportez une sauvegarde JSON."); }
@@ -550,6 +557,7 @@ function syncOnLoad(){
     const lastLocalSyncAt = Number(localStorage.getItem(SYNC_LAST_AT_KEY)||0);
     if(data && data.updatedAt && data.updatedAt > lastLocalSyncAt){
       state = data.state || defaultState();
+      normalizeState(state);
       const newImages = data.images || {};
       const putTasks = Object.keys(newImages).map(function(id){
         imageCache[id] = newImages[id];
@@ -1053,9 +1061,10 @@ const SA_LABELS = {
 function renderSeancePanel(cls, num){
   const se = ensureSeance(cls, num);
   const situs = SITUATIONS_BY_SEANCE[num].concat(["recap"]);
+  const tabIds = ["presence"].concat(situs);
   const seKey = cls+"_s"+num;
   let active = uiState.seanceTab[seKey] || situs[0];
-  if(!situs.includes(active)){ active = situs[0]; uiState.seanceTab[seKey] = active; }
+  if(!tabIds.includes(active)){ active = situs[0]; uiState.seanceTab[seKey] = active; }
 
   const header = `
     <div class="row">
@@ -1064,14 +1073,13 @@ function renderSeancePanel(cls, num){
       </div>
       <button class="btn-danger" data-action="delete-seance" data-class="${escAttr(cls)}" data-seance="${num}">🗑️ Supprimer cette séance</button>
     </div>
-    ${renderPresence(cls, num)}
     <hr class="sep">
   `;
   const saLabels = SA_LABELS[num] || {};
-  const subTabs = situs.map(id=>({id, label:(saLabels[id]?saLabels[id]+" – ":"")+SITU_LABEL[id]}));
-  const situationBody = renderSituationBody(cls, num, active);
+  const subTabs = [{id:"presence", label:"🏃 Présence"}].concat(situs.map(id=>({id, label:(saLabels[id]?saLabels[id]+" – ":"")+SITU_LABEL[id]})));
+  const bodyContent = active==="presence" ? renderPresence(cls, num) : renderSituationBody(cls, num, active);
   return header + tabBar(subTabs, active, "set-seance-tab", `data-class="${escAttr(cls)}" data-seance="${num}"`, 3) +
-    `<div class="tabpanel" style="box-shadow:none;">${situationBody}</div>`;
+    `<div class="tabpanel" style="box-shadow:none;">${bodyContent}</div>`;
 }
 
 function renderSituationBody(cls, num, type){
@@ -2146,6 +2154,7 @@ document.addEventListener("change", function(e){
       const newState = data && data.state ? data.state : data;
       const newImages = data && data.images ? data.images : {};
       state = newState;
+      normalizeState(state);
       const putTasks = Object.keys(newImages).map(id=>{
         imageCache[id] = newImages[id];
         return idbPut(id, newImages[id]).catch(()=>{});
