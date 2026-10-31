@@ -72,6 +72,16 @@ main#app{max-width:1600px;margin:14px auto 60px;padding:0 12px;}
 .tabbar.lvl3{border-bottom:3px solid var(--accent);margin-top:12px;}
 .tabbar.lvl3 .tabbtn{font-size:12px;padding:6px 12px;}
 .tabbar.lvl3 .tabbtn.active{background:var(--accent);color:#fff;}
+.tabbar.lvl2 .tabbtn.active.col-c0,.tabbar.lvl3 .tabbtn.active.col-c0{background:#2563eb;}
+.tabbar.lvl2 .tabbtn.active.col-c1,.tabbar.lvl3 .tabbtn.active.col-c1{background:#7c3aed;}
+.tabbar.lvl2 .tabbtn.active.col-c2,.tabbar.lvl3 .tabbtn.active.col-c2{background:#db2777;}
+.tabbar.lvl2 .tabbtn.active.col-c3,.tabbar.lvl3 .tabbtn.active.col-c3{background:#ea580c;}
+.tabbar.lvl2 .tabbtn.active.col-c4,.tabbar.lvl3 .tabbtn.active.col-c4{background:#0891b2;}
+.tabbar.lvl2 .tabbtn.active.col-c5,.tabbar.lvl3 .tabbtn.active.col-c5{background:#d97706;}
+.tabbar.lvl2 .tabbtn.active.col-c6,.tabbar.lvl3 .tabbtn.active.col-c6{background:#dc2626;}
+.tabbar.lvl2 .tabbtn.active.col-c7,.tabbar.lvl3 .tabbtn.active.col-c7{background:#4f46e5;}
+.tabbar.lvl2 .tabbtn.active.col-c8,.tabbar.lvl3 .tabbtn.active.col-c8{background:#c026d3;}
+.tabbar.lvl2 .tabbtn.active.col-c9,.tabbar.lvl3 .tabbtn.active.col-c9{background:#475569;}
 .tabpanel{background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(20,30,50,.06);}
 .tabbadge{background:#0002;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:5px;}
 
@@ -594,6 +604,11 @@ function setPath(obj, path, value){
 
 /* ===================== HELPERS DOMAINE ===================== */
 const CLASSES_COLLEGE = ["4e1","4e2","4e3","4e4"];
+function classColorClass(cls){
+  const extraClasses = Object.keys(state.classes).filter(c=>!CLASSES_COLLEGE.includes(c)).sort((a,b)=>a.localeCompare(b,"fr"));
+  const i = CLASSES_COLLEGE.concat(extraClasses).indexOf(cls);
+  return "col-c"+(i>=0 ? i%PALETTE_COUNT : 0);
+}
 
 function ensureClass(name){
   if(!state.classes[name]) state.classes[name] = { students: [] };
@@ -859,7 +874,8 @@ function renderGeneralPanel(){
 /* ---------- Classe ---------- */
 function renderClassPanel(cls){
   ensureClass(cls);
-  const subTabs = [{id:"s1", label:"Séance 1"}, {id:"s2", label:"Séance 2"}, {id:"s3", label:"Séance 3"}];
+  const colCls = classColorClass(cls);
+  const subTabs = [{id:"s1", label:"Séance 1", extraClass:colCls}, {id:"s2", label:"Séance 2", extraClass:colCls}, {id:"s3", label:"Séance 3", extraClass:colCls}];
   const active = uiState.classTab[cls] || "s1";
   if(!subTabs.some(t=>t.id===active)) uiState.classTab[cls]="s1";
   const activeFinal = uiState.classTab[cls] || "s1";
@@ -1076,7 +1092,8 @@ function renderSeancePanel(cls, num){
     <hr class="sep">
   `;
   const saLabels = SA_LABELS[num] || {};
-  const subTabs = [{id:"presence", label:"🏃 Présence"}].concat(situs.map(id=>({id, label:(saLabels[id]?saLabels[id]+" – ":"")+SITU_LABEL[id]})));
+  const colCls = classColorClass(cls);
+  const subTabs = [{id:"presence", label:"🏃 Présence", extraClass:colCls}].concat(situs.map(id=>({id, label:(saLabels[id]?saLabels[id]+" – ":"")+SITU_LABEL[id], extraClass:colCls})));
   const bodyContent = active==="presence" ? renderPresence(cls, num) : renderSituationBody(cls, num, active);
   return header + tabBar(subTabs, active, "set-seance-tab", `data-class="${escAttr(cls)}" data-seance="${num}"`, 3) +
     `<div class="tabpanel" style="box-shadow:none;">${bodyContent}</div>`;
