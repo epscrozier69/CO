@@ -1568,10 +1568,11 @@ function renderPapillon(cls, num){
     migratePapillonRow(r);
     function parcoursCell(p, pnum, pField){
       const chips = p.balises.map((b,bi)=>{
-        if(b.code==null) return `<span class="cell-btn" style="min-width:44px;margin:1px;">—</span>`;
+        const editBtn = `<button class="btn-xs" data-action="edit-papillon-balise-code" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}" title="Modifier le numéro de cette balise (balise cassée, etc.)">✏️</button>`;
+        if(b.code==null) return `<span style="display:inline-flex;align-items:center;gap:1px;margin:1px;"><span class="cell-btn" style="min-width:44px;">—</span>${editBtn}</span>`;
         const label = (b.found?"✔ ":"")+b.code+" ("+(b.color==="rouge"?rougePts:5)+")";
         const cls2 = b.found ? b.color : "";
-        return `<span class="cell-btn ${cls2}" style="min-width:52px;margin:1px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:1px;margin:1px;"><span class="cell-btn ${cls2}" style="min-width:52px;" data-action="toggle-papillon-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" data-index="${bi}">${label}</span>${editBtn}</span>`;
       }).join("");
       const departHtml = p.depart
         ? `<b class="time-tag depart" style="font-size:14px;">${fmtClock(p.depart)}</b>`
@@ -1580,9 +1581,7 @@ function renderPapillon(cls, num){
         ? `<b class="time-tag fin" style="font-size:14px;">${fmtClock(p.fin)}</b>`
         : `<button class="btn-small btn-navy" style="font-size:13px;padding:4px 8px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
       let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green" style="font-size:14px;">${fmtElapsed(p.fin-p.depart)}</span>` : "";
-      const numLabel = (pField==="p3")
-        ? `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-p3-parcours" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`
-        : (p.parcoursNum!=null ? `<div style="font-weight:800;font-size:15px;margin-bottom:4px;">N° ${p.parcoursNum}</div>` : "");
+      const numLabel = `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-papillon-parcours-num" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-pfield="${pField}" title="Changer le numéro de ce parcours"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`;
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
       const pPoints = papillonParcoursPoints(num, p);
       const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
@@ -1907,6 +1906,22 @@ document.addEventListener("click", function(e){
     });
     return;
   }
+  if(action==="edit-papillon-balise-code"){
+    const pnum = t.dataset.parcours, bi = Number(t.dataset.index);
+    const se = ensureSeance(cls,num);
+    const r = se.papillon.rows[gid];
+    const p = r && r["p"+pnum];
+    const b = p && p.balises[bi];
+    const val = prompt("Numéro de la balise pour cette case (balise cassée : indiquez le numéro de remplacement) :", (b && b.code!=null) ? b.code : "");
+    if(val===null) return;
+    const trimmed = val.trim();
+    setRow("papillon",cls,num,gid,row=>{
+      const pp = row["p"+pnum]; if(!pp) return;
+      const bb = pp.balises[bi]; if(!bb) return;
+      bb.code = trimmed==="" ? null : trimmed;
+    });
+    return;
+  }
   if(action==="papillon-parcours-depart"){
     const pnum = t.dataset.parcours;
     setRow("papillon",cls,num,gid,r=>{ const p = r["p"+pnum]; if(p) p.depart = Date.now(); });
@@ -2111,21 +2126,22 @@ document.addEventListener("change", function(e){
     }
     return;
   }
-  if(el.dataset.actionSelect==="set-p3-parcours"){
-    const cls = el.dataset.class, num = el.dataset.seance, gid = el.dataset.groupe;
+  if(el.dataset.actionSelect==="set-papillon-parcours-num"){
+    const cls = el.dataset.class, num = el.dataset.seance, gid = el.dataset.groupe, pField = el.dataset.pfield;
     const val = el.value ? Number(el.value) : null;
     const se = ensureSeance(cls,num);
     if(!se.papillon.rows[gid]) se.papillon.rows[gid] = defaultRowFor("papillon",num);
     const r = se.papillon.rows[gid];
-    if(!r.p3) r.p3 = emptyPapillonParcours();
-    r.p3.parcoursNum = val;
+    if(!r[pField]) r[pField] = emptyPapillonParcours();
+    const p = r[pField];
+    p.parcoursNum = val;
     const map = papillonBaliseMap(Number(num));
     if(val!=null && map && map[val]){
-      r.p3.balises = map[val].map(b=>({code:b.c, color:b.col, found:false}));
+      p.balises = map[val].map(b=>({code:b.c, color:b.col, found:false}));
     } else {
-      r.p3.balises = Array.from({length:3},()=>({code:null,color:null,found:false}));
+      p.balises = Array.from({length:3},()=>({code:null,color:null,found:false}));
     }
-    r.p3.depart = null; r.p3.fin = null;
+    p.depart = null; p.fin = null;
     saveState(); renderApp();
     return;
   }
