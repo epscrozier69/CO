@@ -548,7 +548,11 @@ function doGithubPush(){
       updateSyncStatusUI("ok", payload.updatedAt);
     })
     .catch(function(err){
-      updateSyncStatusUI("error", null, err.message);
+      const isConflict = /HTTP 409/.test(err.message);
+      const msg = isConflict
+        ? "Conflit : les données distantes ont changé entre-temps (probablement modifiées sur un autre appareil pendant que celui-ci était aussi ouvert). Rechargez complètement cette page pour récupérer la dernière version, puis refaites votre modification."
+        : err.message;
+      updateSyncStatusUI("error", null, msg);
     })
     .finally(function(){ githubSyncing = false; });
 }
@@ -586,7 +590,16 @@ function syncOnLoad(){
         renderApp();
       });
     }
-    return doGithubPush();
+    if(!data){
+      /* Aucun fichier distant pour l'instant : on initialise la synchro en poussant l'état local. */
+      return doGithubPush();
+    }
+    /* Rien de neuf côté distant : on ne pousse PAS automatiquement ici. Repousser à chaque
+       chargement même sans modification locale écraserait inutilement les données d'un autre
+       appareil avec une estampille plus récente. Seule une vraie modification locale (via
+       saveState()) déclenche un envoi, dans scheduleGithubPush(). */
+    updateSyncStatusUI("ok", lastLocalSyncAt || data.updatedAt);
+    return Promise.resolve();
   }).catch(function(err){
     updateSyncStatusUI("error", null, err.message);
   });
