@@ -1,4 +1,4 @@
-const CACHE_NAME = "co-cache-v1";
+const CACHE_NAME = "co-cache-v2";
 const APP_SHELL = ["CO.html"];
 
 self.addEventListener("install", function(event){
