@@ -1166,6 +1166,13 @@ function recapRowData(cls, num){
   if(!se.comportement) se.comportement = {};
   if(num===1 && !se.sa1TraceStop) se.sa1TraceStop = {};
   const situs = SITUATIONS_BY_SEANCE[num];
+  let papillonMaxParcours = 2;
+  if(situs.includes("papillon")){
+    ((se.groupesBySitu && se.groupesBySitu.papillon) || []).forEach(g=>{
+      const row = se.papillon.rows[g.id];
+      if(row){ migratePapillonRow(row); if(row.p3) papillonMaxParcours = 3; }
+    });
+  }
   const students = [...c.students].sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
   const data = students.map(s=>{
     const presenceInfo = se.presence && se.presence[s.id];
@@ -1173,13 +1180,17 @@ function recapRowData(cls, num){
     const situValues = situs.map(situ=>{
       const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
       const g = groupes.find(gr=>gr.memberIds.includes(s.id));
+      if(situ==="papillon" && !g) return Array.from({length:papillonMaxParcours},()=>"");
       if(!g) return "";
       if(!se[situ].rows[g.id]) se[situ].rows[g.id] = defaultRowFor(situ, num);
       const row = se[situ].rows[g.id];
       if(situ==="papillon"){
         migratePapillonRow(row);
-        const parcoursList = [["P1",row.p1],["P2",row.p2]].concat(row.p3 ? [["P3",row.p3]] : []);
-        return parcoursList.map(([label,p])=>label+":"+(papillonParcoursEffectiveNote(num,row,p)||"—")).join(" / ");
+        const parcoursList = [row.p1, row.p2].concat(row.p3 ? [row.p3] : []);
+        return Array.from({length:papillonMaxParcours},(_,i)=>{
+          const p = parcoursList[i];
+          return p ? (papillonParcoursEffectiveNote(num,row,p)||"") : "";
+        });
       }
       let display = row.note;
       if(display==="" || display==null){
@@ -1199,7 +1210,24 @@ function recapRowData(cls, num){
       observation: se.observations[s.id]||""
     };
   });
-  return {se, situs, data};
+  return {se, situs, data, papillonMaxParcours};
+}
+function recapCsvHeaders(situs, papillonMaxParcours){
+  const headers = [];
+  situs.forEach(situ=>{
+    if(situ==="papillon"){ for(let i=1;i<=papillonMaxParcours;i++) headers.push("Papillon P"+i); }
+    else headers.push(SITU_LABEL[situ].replace(/^[^\s]+\s/,""));
+  });
+  return headers;
+}
+function recapRowValues(situs, situValues){
+  const vals = [];
+  situs.forEach((situ,si)=>{
+    const v = situValues[si];
+    if(situ==="papillon") vals.push.apply(vals, v);
+    else vals.push(v);
+  });
+  return vals;
 }
 function recapCsvFilename(cls, num){ return "Recap_"+cls+"_Seance"+num+"_"+new Date().toISOString().slice(0,10)+".csv"; }
 function csvEscape(v){
@@ -1209,13 +1237,13 @@ function csvEscape(v){
 function presenceLabelLong(status){ return status==="absent" ? "ABSENT" : (status==="dispense" ? "DISPENSÉ" : ""); }
 function presenceLabelShort(status){ return status==="absent" ? "ABS" : (status==="dispense" ? "DISP" : "—"); }
 function exportRecapCSV(cls, num){
-  const {situs, data} = recapRowData(cls, num);
-  const headers = ["Nom","Prénom","Présence"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  const {situs, data, papillonMaxParcours} = recapRowData(cls, num);
+  const headers = ["Nom","Prénom","Présence"].concat(recapCsvHeaders(situs, papillonMaxParcours));
   if(num===1) headers.push("SA1 Tracé stop");
   headers.push("Comportement","Observations");
   const lines = [headers.map(csvEscape).join(";")];
   data.forEach(d=>{
-    const row = [d.s.nom, d.s.prenom, presenceLabelLong(d.presenceStatus)].concat(d.situValues);
+    const row = [d.s.nom, d.s.prenom, presenceLabelLong(d.presenceStatus)].concat(recapRowValues(situs, d.situValues));
     if(num===1) row.push(d.sa1);
     row.push(d.comportement, d.observation);
     lines.push(row.map(csvEscape).join(";"));
@@ -1228,13 +1256,13 @@ function exportRecapCSV(cls, num){
   document.body.appendChild(a); a.click(); a.remove();
 }
 function printRecap(cls, num){
-  const {situs, data} = recapRowData(cls, num);
+  const {situs, data, papillonMaxParcours} = recapRowData(cls, num);
   const se = ensureSeance(cls, num);
-  const headCells = ["Nom","Prénom","Présence"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  const headCells = ["Nom","Prénom","Présence"].concat(recapCsvHeaders(situs, papillonMaxParcours));
   if(num===1) headCells.push("SA1 Tracé stop");
   headCells.push("Comportement","Observations");
   const bodyRows = data.map(d=>{
-    const cells = [escHtml(d.s.nom), escHtml(d.s.prenom), escHtml(presenceLabelShort(d.presenceStatus))].concat(d.situValues.map(v=>escHtml(v||"—")));
+    const cells = [escHtml(d.s.nom), escHtml(d.s.prenom), escHtml(presenceLabelShort(d.presenceStatus))].concat(recapRowValues(situs, d.situValues).map(v=>escHtml(v||"—")));
     if(num===1) cells.push(escHtml(d.sa1||"—"));
     cells.push(escHtml(d.comportement||"—"), escHtml(d.observation||""));
     return "<tr>"+cells.map(c=>`<td>${c}</td>`).join("")+"</tr>";
