@@ -605,6 +605,13 @@ function syncOnLoad(){
   });
 }
 
+/* Dès que la tablette retrouve le réseau, on retente immédiatement l'envoi : sans ça, une
+   modification faite hors connexion reste bloquée en erreur jusqu'à la prochaine modification. */
+window.addEventListener("online", function(){
+  const cfg = getSyncConfig();
+  if(cfg && cfg.token) doGithubPush();
+});
+
 function uid(){ return "id"+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 function normalize(s){ return (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim(); }
 function escAttr(s){ return (s||"").toString().replace(/"/g,"&quot;"); }
@@ -1031,7 +1038,8 @@ function combineLetterGrades(g1,g2){
   return RANK_GRADE[avg] || g1;
 }
 function papillonParcoursGrade(num, points, elapsedMs){
-  if(elapsedMs==null || points<=0) return null;
+  if(elapsedMs==null) return null;
+  if(points<=0) return "I";
   const minutes = elapsedMs/60000;
   if(num===2){
     const grid = PAPILLON_BAREME_S2_GRID, cols = PAPILLON_BAREME_S2_TIME_COLS, keys = [25,20,15,10,5];
@@ -1154,23 +1162,28 @@ function recapRowData(cls, num){
   const situs = SITUATIONS_BY_SEANCE[num];
   const students = [...c.students].sort((a,b)=> (a.nom||"").localeCompare(b.nom||"","fr") || (a.prenom||"").localeCompare(b.prenom||"","fr"));
   const data = students.map(s=>{
+    const presenceInfo = se.presence && se.presence[s.id];
+    const presenceStatus = presenceInfo && presenceInfo.absent ? "absent" : (presenceInfo && presenceInfo.dispense ? "dispense" : "present");
     const situValues = situs.map(situ=>{
       const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
       const g = groupes.find(gr=>gr.memberIds.includes(s.id));
       if(!g) return "";
       if(!se[situ].rows[g.id]) se[situ].rows[g.id] = defaultRowFor(situ, num);
       const row = se[situ].rows[g.id];
-      if(situ==="papillon") migratePapillonRow(row);
+      if(situ==="papillon"){
+        migratePapillonRow(row);
+        const parcoursList = [["P1",row.p1],["P2",row.p2]].concat(row.p3 ? [["P3",row.p3]] : []);
+        return parcoursList.map(([label,p])=>label+":"+(papillonParcoursEffectiveNote(num,row,p)||"—")).join(" / ");
+      }
       let display = row.note;
       if(display==="" || display==null){
         if(situ==="suivi") display = suggestedNoteSuivi(row);
         else if(situ==="etoile") display = suggestedNoteEtoile(row, num, ETOILE_BALISES[num]||5);
-        else if(situ==="papillon") display = papillonPointsAndNote(row, num).suggestedNote;
         else if(situ==="scores") display = scoresPointsAndNote(row).suggestedNote;
       }
       return display!=null ? display : "";
     });
-    return { s, groupId: (()=>{
+    return { s, presenceStatus, groupId: (()=>{
         for(const situ of situs){ const groupes=(se.groupesBySitu&&se.groupesBySitu[situ])||[]; const g=groupes.find(gr=>gr.memberIds.includes(s.id)); if(g) return g.id; }
         return null;
       })(),
@@ -1187,14 +1200,16 @@ function csvEscape(v){
   const s = (v==null?"":String(v));
   return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
 }
+function presenceLabelLong(status){ return status==="absent" ? "ABSENT" : (status==="dispense" ? "DISPENSÉ" : ""); }
+function presenceLabelShort(status){ return status==="absent" ? "ABS" : (status==="dispense" ? "DISP" : "—"); }
 function exportRecapCSV(cls, num){
   const {situs, data} = recapRowData(cls, num);
-  const headers = ["Nom","Prénom"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  const headers = ["Nom","Prénom","Présence"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
   if(num===1) headers.push("SA1 Tracé stop");
   headers.push("Comportement","Observations");
   const lines = [headers.map(csvEscape).join(";")];
   data.forEach(d=>{
-    const row = [d.s.nom, d.s.prenom].concat(d.situValues);
+    const row = [d.s.nom, d.s.prenom, presenceLabelLong(d.presenceStatus)].concat(d.situValues);
     if(num===1) row.push(d.sa1);
     row.push(d.comportement, d.observation);
     lines.push(row.map(csvEscape).join(";"));
@@ -1209,11 +1224,11 @@ function exportRecapCSV(cls, num){
 function printRecap(cls, num){
   const {situs, data} = recapRowData(cls, num);
   const se = ensureSeance(cls, num);
-  const headCells = ["Nom","Prénom"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
+  const headCells = ["Nom","Prénom","Présence"].concat(situs.map(situ=>SITU_LABEL[situ].replace(/^[^\s]+\s/,"")));
   if(num===1) headCells.push("SA1 Tracé stop");
   headCells.push("Comportement","Observations");
   const bodyRows = data.map(d=>{
-    const cells = [escHtml(d.s.nom), escHtml(d.s.prenom)].concat(d.situValues.map(v=>escHtml(v||"—")));
+    const cells = [escHtml(d.s.nom), escHtml(d.s.prenom), escHtml(presenceLabelShort(d.presenceStatus))].concat(d.situValues.map(v=>escHtml(v||"—")));
     if(num===1) cells.push(escHtml(d.sa1||"—"));
     cells.push(escHtml(d.comportement||"—"), escHtml(d.observation||""));
     return "<tr>"+cells.map(c=>`<td>${c}</td>`).join("")+"</tr>";
@@ -1238,14 +1253,29 @@ function renderRecap(cls, num){
       const groupes = (se.groupesBySitu && se.groupesBySitu[situ]) || [];
       const g = groupes.find(gr=>gr.memberIds.includes(s.id));
       if(!g) return `<td><span class="hint">—</span></td>`;
+      if(situ==="papillon"){
+        const prow = se.papillon.rows[g.id];
+        const parcoursList = [["p1",prow.p1],["p2",prow.p2]].concat(prow.p3 ? [["p3",prow.p3]] : []);
+        const inputs = parcoursList.map(([field,p])=>{
+          const val = papillonParcoursEffectiveNote(num, prow, p);
+          return `<input class="inline-text ${gradeColorClass(val)}" style="width:42px;text-align:center;font-weight:800;font-size:12px;margin:1px;" type="text" value="${escAttr(val)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${field}.note" title="Note parcours ${field.slice(1)}">`;
+        }).join("");
+        return `<td>${inputs}</td>`;
+      }
       return `<td><input class="inline-text ${gradeColorClass(display)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(display!=null?display:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.${situ}.rows.${g.id}.note"></td>`;
     }).join("");
     const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", d.sa1)}</div></td>` : "";
     const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", d.comportement);
     const c2 = ROW_COLORS[i % ROW_COLORS.length];
+    const presenceBadge = d.presenceStatus==="absent"
+      ? `<span class="presence-chip presence-abs" style="cursor:default;">⊘ ABS</span>`
+      : d.presenceStatus==="dispense"
+        ? `<span class="presence-chip presence-disp" style="cursor:default;">⊘ DISP</span>`
+        : "";
     return `<tr style="background:${c2.bg};color:${c2.text};">
       <td class="left" style="font-weight:800;background:${c2.bg};color:${c2.text};">${escHtml(s.nom)}</td>
       <td class="left" style="background:${c2.bg};color:${c2.text};">${escHtml(s.prenom)}</td>
+      <td>${presenceBadge}</td>
       ${cells}${sa1Cell}
       <td><div class="comport-toggles">${comportBtns}</div></td>
       <td class="left"><input class="inline-text" type="text" style="width:160px;" placeholder="observation…" value="${escAttr(d.observation)}" data-path="classes.${escAttr(cls)}.seances.s${num}.observations.${s.id}"></td>
@@ -1259,8 +1289,8 @@ function renderRecap(cls, num){
     </div>
     <p class="hint">Élèves par ordre alphabétique, notes obtenues pour chaque situation de cette séance. Cliquez sur TB/S/F/I pour le comportement (re-cliquer désélectionne).</p>
     <div class="table-wrap"><table class="co recap-table">
-      <thead><tr><th class="left">Nom</th><th class="left">Prénom</th>${situHeaders}<th>Comportement</th><th class="left">Observations</th></tr></thead>
-      <tbody>${rows || "<tr><td colspan=\""+(4+situs.length+(num===1?1:0))+"\" class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
+      <thead><tr><th class="left">Nom</th><th class="left">Prénom</th><th>Présence</th>${situHeaders}<th>Comportement</th><th class="left">Observations</th></tr></thead>
+      <tbody>${rows || "<tr><td colspan=\""+(5+situs.length+(num===1?1:0))+"\" class=\"empty\">Aucun élève — importez la liste dans l'onglet Général.</td></tr>"}</tbody>
     </table></div>
   `;
 }
@@ -1594,13 +1624,14 @@ function renderPapillon(cls, num){
         ? `<b class="time-tag fin" style="font-size:14px;">${fmtClock(p.fin)}</b>`
         : `<button class="btn-small btn-navy" style="font-size:13px;padding:4px 8px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
       let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green" style="font-size:14px;">${fmtElapsed(p.fin-p.depart)}</span>` : "";
+      const resetChronoBtn = p.depart ? `<button class="btn-xs" data-action="papillon-parcours-reset-chrono" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" title="Relancer le chrono pour ce parcours (efface départ/fin)">🔄</button>` : "";
       const numLabel = `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-papillon-parcours-num" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-pfield="${pField}" title="Changer le numéro de ce parcours"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`;
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
       const pPoints = papillonParcoursPoints(num, p);
       const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
-      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
@@ -1948,6 +1979,12 @@ document.addEventListener("click", function(e){
       if(!p.depart){ alert("Cliquez d'abord sur Départ pour ce parcours."); return; }
       p.fin = Date.now();
     });
+    return;
+  }
+  if(action==="papillon-parcours-reset-chrono"){
+    const pnum = t.dataset.parcours;
+    if(!confirm("Relancer le chrono pour ce parcours ? Le départ et la fin actuels seront effacés.")) return;
+    setRow("papillon",cls,num,gid,r=>{ const p = r["p"+pnum]; if(p){ p.depart=null; p.fin=null; } });
     return;
   }
   if(action==="add-papillon-p3"){
