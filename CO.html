@@ -1632,14 +1632,15 @@ function renderPapillon(cls, num){
         ? `<b class="time-tag fin" style="font-size:14px;">${fmtClock(p.fin)}</b>`
         : `<button class="btn-small btn-navy" style="font-size:13px;padding:4px 8px;" data-action="papillon-parcours-fin" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" ${!p.depart?"disabled":""}>Fin</button>`;
       let timeHtml = (p.depart && p.fin) ? `<span class="time-tag green" style="font-size:14px;">${fmtElapsed(p.fin-p.depart)}</span>` : "";
-      const resetChronoBtn = p.depart ? `<button class="btn-xs" data-action="papillon-parcours-reset-chrono" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" title="Relancer le chrono pour ce parcours (efface départ/fin)">🔄</button>` : "";
+      const resetChronoBtn = p.depart ? `<button class="btn-xs" data-action="papillon-parcours-reset-chrono" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" title="Relancer le chrono pour ce parcours (garde l'ancien chrono en historique)">🔄</button>` : "";
+      const historyHtml = (p.history && p.history.length) ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">⏱️ Essai(s) précédent(s) : ${p.history.map(h=>fmtClock(h.depart)+"→"+fmtClock(h.fin)+" ("+fmtElapsed(h.fin-h.depart)+")").join(" · ")}</div>` : "";
       const numLabel = `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-papillon-parcours-num" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-pfield="${pField}" title="Changer le numéro de ce parcours"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`;
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
       const pPoints = papillonParcoursPoints(num, p);
       const noteInput = noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+pField+".note", noteVal, p.note!==""&&p.note!=null, 50, "Note de ce parcours : cliquez pour changer (TB → S → F → I)");
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
-      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}${noteInput}${pointsTag}${removeBtn}</div>${historyHtml}`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
@@ -1991,8 +1992,16 @@ document.addEventListener("click", function(e){
   }
   if(action==="papillon-parcours-reset-chrono"){
     const pnum = t.dataset.parcours;
-    if(!confirm("Relancer le chrono pour ce parcours ? Le départ et la fin actuels seront effacés.")) return;
-    setRow("papillon",cls,num,gid,r=>{ const p = r["p"+pnum]; if(p){ p.depart=null; p.fin=null; } });
+    if(!confirm("Relancer le chrono pour ce parcours ? L'ancien chrono sera conservé dans l'historique ci-dessous.")) return;
+    setRow("papillon",cls,num,gid,r=>{
+      const p = r["p"+pnum];
+      if(!p) return;
+      if(p.depart && p.fin){
+        if(!p.history) p.history = [];
+        p.history.push({depart:p.depart, fin:p.fin});
+      }
+      p.depart=null; p.fin=null;
+    });
     return;
   }
   if(action==="add-papillon-p3"){
