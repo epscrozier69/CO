@@ -1178,7 +1178,7 @@ function noteBadge(path, suggestedNote, manualValue, width, titleText){
   const effective = manual ? manualValue : suggestedNote;
   const underline = manual ? "text-decoration:underline;text-underline-offset:2px;" : "";
   const w = width || 50;
-  const proposedLabel = (suggestedNote!=null && suggestedNote!=="") ? ("Proposée : "+suggestedNote) : "Proposée";
+  const proposedLabel = (suggestedNote!=null && suggestedNote!=="") ? suggestedNote : "—";
   const options = `<option value="" ${!manual?"selected":""}>${escHtml(proposedLabel)}</option>`
     + GRADE_SELECT_OPTIONS.map(opt=>`<option value="${escAttr(opt)}" ${manual&&manualValue===opt?"selected":""}>${escHtml(opt)}</option>`).join("");
   return `<select class="cell-btn ${gradeColorClass(effective)}" style="display:inline-block;width:${w}px;text-align:center;text-align-last:center;font-weight:800;cursor:pointer;${underline}" data-path="${escAttr(path)}" title="${escAttr(titleText||"Choisir une note, ou garder la note proposée")}">${options}</select>`;
