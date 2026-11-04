@@ -103,11 +103,11 @@ a{color:#1458a8;}
 h2.ptitle{font-size:16px;margin:0 0 10px;color:var(--navy2);}
 
 /* ---------- tables ---------- */
-.table-wrap{overflow-x:auto;overflow-y:clip;max-width:100%;border-radius:8px;border:1px solid var(--line);}
+.table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;max-width:100%;border-radius:8px;border:1px solid var(--line);}
 table.co{border-collapse:separate;border-spacing:0;width:auto;}
 table.co th,table.co td{border:1px solid var(--line);padding:3px 7px;white-space:nowrap;font-size:12.5px;text-align:center;}
 table.co td.left,table.co th.left{text-align:left;}
-table.co thead th{color:#fff;font-weight:700;position:sticky;z-index:5;}
+table.co thead th{color:#fff;font-weight:700;position:sticky;top:0;z-index:5;}
 table.co tbody tr:nth-child(even){background:#f8fafc;}
 table.co tbody tr:hover{filter:brightness(0.97);}
 table.co tbody tr.row-highlighted td:nth-child(1),
@@ -891,6 +891,11 @@ function applyStickyCols(){
   const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
   if(tabbarEl) tabbarEl.style.top = headerH + "px";
   const stickyTop = headerH + (tabbarEl ? tabbarEl.getBoundingClientRect().height : 0);
+  /* Chaque tableau défile désormais dans sa propre zone (hauteur limitée, scroll interne),
+     avec son en-tête collé en haut de CETTE zone (CSS top:0) — on évite ainsi de dépendre
+     du défilement de la page entière pour le sticky, peu fiable sur certaines tablettes. */
+  const maxH = Math.max(220, window.innerHeight - stickyTop - 24);
+  document.querySelectorAll(".table-wrap").forEach(wrap=>{ wrap.style.maxHeight = maxH+"px"; });
   document.querySelectorAll(".table-wrap table").forEach(table=>{
     const headRow = table.tHead && table.tHead.rows[0];
     if(!headRow || headRow.cells.length<2) return;
@@ -902,7 +907,6 @@ function applyStickyCols(){
       c0.style.position = "sticky"; c0.style.left = "0px"; c0.style.zIndex = inHead?"7":"4";
       c1.style.position = "sticky"; c1.style.left = w1+"px"; c1.style.zIndex = inHead?"7":"4";
       c1.style.boxShadow = "2px 0 4px -2px rgba(0,0,0,.35)";
-      if(inHead){ row.querySelectorAll("th").forEach(th=>{ th.style.top = stickyTop+"px"; }); }
     });
   });
 }
