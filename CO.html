@@ -104,6 +104,8 @@ h2.ptitle{font-size:16px;margin:0 0 10px;color:var(--navy2);}
 
 /* ---------- tables ---------- */
 .table-wrap{overflow-x:auto;max-width:100%;border-radius:8px;border:1px solid var(--line);}
+.sticky-head-clone{position:fixed;overflow:hidden;z-index:50;display:none;box-shadow:0 3px 8px rgba(0,0,0,.3);}
+.sticky-head-clone table{margin:0;}
 table.co{border-collapse:separate;border-spacing:0;width:auto;}
 table.co th,table.co td{border:1px solid var(--line);padding:3px 7px;white-space:nowrap;font-size:12.5px;text-align:center;}
 table.co td.left,table.co th.left{text-align:left;}
@@ -685,7 +687,24 @@ function ensureSeance(cls, num){
       delete se.groupes;
     }
   }
+  catchUpGroupesSync(se, num);
   return se;
+}
+/* Filet de rattrapage : si la 2ème situation d'une séance n'a jamais été composée (et n'a
+   jamais été modifiée à la main) alors que la 1ère a des binômes, on les recopie — y compris
+   pour des séances dont les groupes existaient déjà avant que cette synchro automatique
+   n'existe (elle ne se déclenchait auparavant que sur une modification explicite). */
+function catchUpGroupesSync(se, num){
+  const situs = SITUATIONS_BY_SEANCE[Number(num)] || [];
+  const src = situs[0], target = situs[1];
+  if(!src || !target) return;
+  if(se.situManual && se.situManual[target]) return;
+  const srcGroupes = se.groupesBySitu[src];
+  if(!srcGroupes || !srcGroupes.length) return;
+  const targetGroupes = se.groupesBySitu[target];
+  if(targetGroupes && targetGroupes.length) return;
+  se.groupesBySitu[target] = srcGroupes.map(g=>({id:uid(), memberIds:[...g.memberIds]}));
+  saveState();
 }
 function ensureGroupesSitu(se, situ){
   if(!se.groupesBySitu[situ]) se.groupesBySitu[situ] = [];
@@ -883,15 +902,18 @@ function renderApp(){
   const html = tabBar(topTabs, uiState.top, "set-top-tab", "", 1) + `<div class="tabpanel">${panel}</div>`;
   document.getElementById("app").innerHTML = html;
   applyStickyCols();
-  requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+  requestAnimationFrame(()=>{ window.scrollTo(0,scrollY); updateStickyHeadClones(); });
 }
 function applyStickyCols(){
   const headerEl = document.querySelector("header.top");
   const tabbarEl = document.querySelector(".tabbar.lvl1");
   const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
   if(tabbarEl) tabbarEl.style.top = headerH + "px";
-  /* Les tableaux défilent avec la page (pas de fenêtre interne) ; seules les 2 premières
-     colonnes restent figées horizontalement pour garder le nom du binôme visible. */
+  /* Les tableaux défilent avec la page (pas de fenêtre interne, défilement normal) ; les 2
+     premières colonnes restent figées horizontalement pour garder le nom du binôme visible,
+     et un clone fixe de la ligne d'en-tête (buildStickyHeadClones) la garde visible en haut
+     de l'écran pendant le défilement vertical, sans dépendre de position:sticky imbriqué dans
+     un ancêtre overflow-x:auto (peu fiable sur certains navigateurs tablette). */
   document.querySelectorAll(".table-wrap table").forEach(table=>{
     const headRow = table.tHead && table.tHead.rows[0];
     if(!headRow || headRow.cells.length<2) return;
@@ -905,13 +927,62 @@ function applyStickyCols(){
       c1.style.boxShadow = "2px 0 4px -2px rgba(0,0,0,.35)";
     });
   });
+  buildStickyHeadClones();
 }
+function buildStickyHeadClones(){
+  document.querySelectorAll(".sticky-head-clone").forEach(el=>el.remove());
+  document.querySelectorAll(".table-wrap").forEach(wrap=>{
+    wrap._stickyClone = null;
+    const table = wrap.querySelector("table.co");
+    if(!table || !table.tHead || !table.tHead.rows.length) return;
+    const clone = document.createElement("div");
+    clone.className = "sticky-head-clone";
+    const cloneTable = document.createElement("table");
+    cloneTable.className = table.className;
+    const cloneThead = table.tHead.cloneNode(true);
+    cloneTable.appendChild(cloneThead);
+    const realCells = table.tHead.rows[0].cells;
+    const cloneCells = cloneThead.rows[0].cells;
+    Array.prototype.forEach.call(realCells, (cell,i)=>{
+      const w = cell.getBoundingClientRect().width;
+      if(cloneCells[i]){ cloneCells[i].style.width = w+"px"; cloneCells[i].style.minWidth = w+"px"; cloneCells[i].style.maxWidth = w+"px"; }
+    });
+    clone.appendChild(cloneTable);
+    document.body.appendChild(clone);
+    wrap._stickyClone = clone;
+  });
+}
+function updateStickyHeadClones(){
+  const tabbarEl = document.querySelector(".tabbar.lvl1");
+  const stickyTop = tabbarEl ? tabbarEl.getBoundingClientRect().bottom : 0;
+  document.querySelectorAll(".table-wrap").forEach(wrap=>{
+    const clone = wrap._stickyClone;
+    const table = wrap.querySelector("table.co");
+    if(!clone || !table || !table.tHead){ if(clone) clone.style.display="none"; return; }
+    const theadRect = table.tHead.getBoundingClientRect();
+    const tableRect = table.getBoundingClientRect();
+    const show = theadRect.top < stickyTop - 0.5 && tableRect.bottom > stickyTop + theadRect.height;
+    if(!show){ clone.style.display = "none"; return; }
+    const wrapRect = wrap.getBoundingClientRect();
+    clone.style.display = "block";
+    clone.style.top = stickyTop + "px";
+    clone.style.left = wrapRect.left + "px";
+    clone.style.width = wrapRect.width + "px";
+    clone.scrollLeft = wrap.scrollLeft;
+  });
+}
+let _stickyHeadRaf = null;
+function scheduleStickyHeadUpdate(){
+  if(_stickyHeadRaf) return;
+  _stickyHeadRaf = requestAnimationFrame(()=>{ _stickyHeadRaf = null; updateStickyHeadClones(); });
+}
+window.addEventListener("scroll", scheduleStickyHeadUpdate, {passive:true, capture:true});
 let _stickyColsResizeTimer = null;
 window.addEventListener("resize", ()=>{
   clearTimeout(_stickyColsResizeTimer);
-  _stickyColsResizeTimer = setTimeout(applyStickyCols, 120);
+  _stickyColsResizeTimer = setTimeout(()=>{ applyStickyCols(); updateStickyHeadClones(); }, 120);
 });
-window.addEventListener("orientationchange", ()=>setTimeout(applyStickyCols, 200));
+window.addEventListener("orientationchange", ()=>setTimeout(()=>{ applyStickyCols(); updateStickyHeadClones(); }, 200));
 
 /* ---------- Général ---------- */
 function renderGeneralPanel(){
