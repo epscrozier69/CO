@@ -677,6 +677,7 @@ function ensureSeance(cls, num){
   const se = c.seances[key];
   if(!se.presence) se.presence = {};
   if(!se.comportement) se.comportement = {};
+  if(!se.situManual) se.situManual = {};
   if(!se.groupesBySitu){
     se.groupesBySitu = {};
     if(Array.isArray(se.groupes)){
@@ -691,13 +692,14 @@ function ensureGroupesSitu(se, situ){
   return se.groupesBySitu[situ];
 }
 /* Quand les binômes de la 1ère situation d'une séance sont modifiés, ils sont recopiés
-   automatiquement vers la 2ème situation UNIQUEMENT si celle-ci n'a pas encore ses propres groupes
-   (pour ne jamais écraser une composition volontairement différente). */
+   automatiquement vers la 2ème situation, et ce à chaque modification (binôme par binôme
+   compris) — UNIQUEMENT si celle-ci n'a jamais été modifiée directement par l'enseignant
+   (se.situManual), pour ne jamais écraser une composition volontairement différente. */
 function syncGroupesToNextSitu(se, num, situ){
   const situs = SITUATIONS_BY_SEANCE[num] || [];
   if(situs[0]!==situ || !situs[1]) return;
   const target = situs[1];
-  if(ensureGroupesSitu(se, target).length) return;
+  if(se.situManual && se.situManual[target]) return;
   se.groupesBySitu[target] = ensureGroupesSitu(se, situ).map(g=>({id:uid(), memberIds:[...g.memberIds]}));
 }
 function isPresent(se, studentId){
@@ -1907,6 +1909,7 @@ document.addEventListener("click", function(e){
     }
     if(n===1) groupes.push({id:uid(), memberIds:[arr[0].id]});
     se.groupesBySitu[situ] = groupes;
+    se.situManual[situ] = true;
     se[situ].rows = {};
     applyEtoileRotation(se, Number(num));
     applyPapillonRotation(se, Number(num));
@@ -1978,6 +1981,7 @@ document.addEventListener("click", function(e){
   if(action==="delete-groupe"){
     const se=ensureSeance(cls,num);
     se.groupesBySitu[situ] = ensureGroupesSitu(se,situ).filter(g=>g.id!==gid);
+    se.situManual[situ] = true;
     applyEtoileRotation(se, Number(num));
     applyPapillonRotation(se, Number(num));
     syncGroupesToNextSitu(se, Number(num), situ);
@@ -1987,6 +1991,7 @@ document.addEventListener("click", function(e){
     const se=ensureSeance(cls,num);
     const g=ensureGroupesSitu(se,situ).find(g=>g.id===gid);
     if(g) g.memberIds=g.memberIds.filter(id=>id!==sid);
+    se.situManual[situ] = true;
     syncGroupesToNextSitu(se, Number(num), situ);
     saveState(); renderApp(); return;
   }
@@ -1998,6 +2003,7 @@ document.addEventListener("click", function(e){
     else{
       const se = ensureSeance(cls,num);
       ensureGroupesSitu(se,situ).push({id:uid(), memberIds: sortMemberIdsByRoster(cls, [prev, sid])});
+      se.situManual[situ] = true;
       applyEtoileRotation(se, Number(num));
       applyPapillonRotation(se, Number(num));
       syncGroupesToNextSitu(se, Number(num), situ);
@@ -2014,6 +2020,7 @@ document.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     const g = ensureGroupesSitu(se,situ).find(g=>g.id===gid);
     if(g && !g.memberIds.includes(pending)) g.memberIds = sortMemberIdsByRoster(cls, g.memberIds.concat([pending]));
+    se.situManual[situ] = true;
     syncGroupesToNextSitu(se, Number(num), situ);
     pendingSelection[key] = null;
     saveState(); renderApp();
