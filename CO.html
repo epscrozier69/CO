@@ -158,7 +158,7 @@ table.co tbody tr:hover{filter:brightness(0.97);}
 .presence-chip .pc-icon{font-size:13px;}
 select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;}
 input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
-input.inline-text{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;width:90%;}
+input.inline-text{border:1px dashed var(--line);border-radius:6px;padding:4px 6px;font-size:12px;width:90%;cursor:text;}
 .img-grid{display:flex;flex-wrap:wrap;gap:10px;}
 .img-card{border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff;width:220px;}
 .img-card img{width:100%;border-radius:6px;display:block;}
@@ -1150,6 +1150,12 @@ function gradeColorClass(val){
   if(v==="I") return "grade-i";
   return "";
 }
+const GRADE_CYCLE = ["TB","S","F","I"];
+function noteBadge(path, display, isManual, width, titleText){
+  const underline = isManual ? "text-decoration:underline;text-underline-offset:2px;" : "";
+  const w = width || 50;
+  return `<span class="cell-btn ${gradeColorClass(display)}" style="display:inline-block;width:${w}px;text-align:center;font-weight:800;cursor:pointer;${underline}" data-action="cycle-grade-note" data-path="${escAttr(path)}" title="${escAttr(titleText||"Cliquez pour changer la note : TB → S → F → I")}">${escHtml(display||"—")}</span>`;
+}
 function manualGradeBtns(cls, num, sid, field, current){
   return COMPORT_OPTIONS.map(opt=>`<button type="button" class="comport-btn ${current===opt?"active "+gradeColorClass(opt):""}" data-action="set-manual-grade" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${sid}" data-field="${field}" data-value="${opt}">${opt}</button>`).join("");
 }
@@ -1258,11 +1264,13 @@ function renderRecap(cls, num){
         const parcoursList = [["p1",prow.p1],["p2",prow.p2]].concat(prow.p3 ? [["p3",prow.p3]] : []);
         const inputs = parcoursList.map(([field,p])=>{
           const val = papillonParcoursEffectiveNote(num, prow, p);
-          return `<input class="inline-text ${gradeColorClass(val)}" style="width:42px;text-align:center;font-weight:800;font-size:12px;margin:1px;" type="text" value="${escAttr(val)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${field}.note" title="Note parcours ${field.slice(1)}">`;
+          return noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+field+".note", val, p.note!==""&&p.note!=null, 42, "Note parcours "+field.slice(1)+" : cliquez pour changer (TB → S → F → I)");
         }).join("");
         return `<td>${inputs}</td>`;
       }
-      return `<td><input class="inline-text ${gradeColorClass(display)}" style="width:55px;text-align:center;font-weight:800;" type="text" value="${escAttr(display!=null?display:"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.${situ}.rows.${g.id}.note"></td>`;
+      const row = se[situ].rows[g.id];
+      const isManual = row && row.note!=="" && row.note!=null;
+      return `<td>${noteBadge("classes."+cls+".seances.s"+num+"."+situ+".rows."+g.id+".note", display, isManual, 55)}</td>`;
     }).join("");
     const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", d.sa1)}</div></td>` : "";
     const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", d.comportement);
@@ -1485,7 +1493,7 @@ function renderSuivi(cls, num){
       <td><span class="cell-btn sens-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer le sens">${sensHtml}</span></td>
       ${balisesHtml}
       <td><b>${justes}/${nb}</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:50px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.suivi.rows.${g.id}.note"></td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".suivi.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 50)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Cliquez sur « Sens » pour indiquer → ou ←. Cliquez sur une balise : — → ✔ (bonne balise + bon placement) → ⚠ (trouvée, mauvais placement) → ✘ (pas trouvée) → —.
@@ -1541,7 +1549,7 @@ function renderEtoile(cls, num){
       ${balisesHtml}
       <td><b>${nbTrouvees}/${nb}</b></td>
       <td><b class="time-tag ${totalColor}">${totalMs!=null?fmtElapsed(totalMs):""}</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:50px;text-align:center;font-weight:800;" type="text" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.note"></td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".etoile.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 50)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ◯ (balise en cours, pour pointer celle visée même hors ordre) → ✔ (validée, temps affiché) → ✘ (non validée) → —.
@@ -1628,7 +1636,7 @@ function renderPapillon(cls, num){
       const numLabel = `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-papillon-parcours-num" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-pfield="${pField}" title="Changer le numéro de ce parcours"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`;
       const noteVal = papillonParcoursEffectiveNote(num, r, p);
       const pPoints = papillonParcoursPoints(num, p);
-      const noteInput = `<input class="inline-text ${gradeColorClass(noteVal)}" style="width:50px;text-align:center;font-weight:800;font-size:15px;" type="text" value="${escAttr(noteVal)}" data-path="classes.${escAttr(cls)}.seances.s${num}.papillon.rows.${g.id}.${pField}.note" title="Note de ce parcours">`;
+      const noteInput = noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+pField+".note", noteVal, p.note!==""&&p.note!=null, 50, "Note de ce parcours : cliquez pour changer (TB → S → F → I)");
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
       return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${noteInput}${pointsTag}${removeBtn}</div>`;
@@ -1722,7 +1730,7 @@ function renderScores(cls, num){
       <td>${countInput("vert")}</td>
       <td><b>${total} pts</b></td>
       <td><b>${tempsTotal}</b></td>
-      <td><input class="inline-text ${gradeColorClass(r.note!==""&&r.note!=null?r.note:suggestedNote)}" style="width:55px;text-align:center;font-weight:800;" type="text" placeholder="${(!r.fin)?"Fin ?":""}" value="${escAttr(r.note!==""&&r.note!=null?r.note:suggestedNote)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.note"></td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".scores.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 55)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Cliquez Départ puis Fin pour chronométrer (Entrée fait passer à la case suivante). Saisissez le nombre de balises trouvées par couleur (Bleu = 15 pts, Rouge = 10 pts, Rose = 5 pts, Vert = 3 pts) ; le score total et la note suggérée (barème points + temps) se calculent automatiquement, modifiable manuellement.</p>
@@ -2005,6 +2013,15 @@ document.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     if(!se[field]) se[field] = {};
     se[field][sid] = (se[field][sid]===val) ? "" : val;
+    saveState(); renderApp();
+    return;
+  }
+  if(action==="cycle-grade-note"){
+    const path = t.dataset.path;
+    const current = (getPath(state, path)||"").toString().trim().toUpperCase();
+    const idx = GRADE_CYCLE.indexOf(current);
+    const next = GRADE_CYCLE[(idx+1)%GRADE_CYCLE.length];
+    setPath(state, path, next);
     saveState(); renderApp();
     return;
   }
