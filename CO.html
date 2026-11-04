@@ -888,7 +888,9 @@ function renderApp(){
 function applyStickyCols(){
   const headerEl = document.querySelector("header.top");
   const tabbarEl = document.querySelector(".tabbar.lvl1");
-  const stickyTop = (headerEl ? headerEl.getBoundingClientRect().height : 0) + (tabbarEl ? tabbarEl.getBoundingClientRect().height : 0);
+  const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
+  if(tabbarEl) tabbarEl.style.top = headerH + "px";
+  const stickyTop = headerH + (tabbarEl ? tabbarEl.getBoundingClientRect().height : 0);
   document.querySelectorAll(".table-wrap table").forEach(table=>{
     const headRow = table.tHead && table.tHead.rows[0];
     if(!headRow || headRow.cells.length<2) return;
@@ -904,6 +906,12 @@ function applyStickyCols(){
     });
   });
 }
+let _stickyColsResizeTimer = null;
+window.addEventListener("resize", ()=>{
+  clearTimeout(_stickyColsResizeTimer);
+  _stickyColsResizeTimer = setTimeout(applyStickyCols, 120);
+});
+window.addEventListener("orientationchange", ()=>setTimeout(applyStickyCols, 200));
 
 /* ---------- Général ---------- */
 function renderGeneralPanel(){
