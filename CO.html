@@ -104,12 +104,14 @@ h2.ptitle{font-size:16px;margin:0 0 10px;color:var(--navy2);}
 
 /* ---------- tables ---------- */
 .table-wrap{overflow-x:auto;max-width:100%;border-radius:8px;border:1px solid var(--line);}
-table.co{border-collapse:collapse;width:auto;}
+table.co{border-collapse:separate;border-spacing:0;width:auto;}
 table.co th,table.co td{border:1px solid var(--line);padding:3px 7px;white-space:nowrap;font-size:12.5px;text-align:center;}
 table.co td.left,table.co th.left{text-align:left;}
-table.co thead th{color:#fff;font-weight:700;position:sticky;top:0;}
+table.co thead th{color:#fff;font-weight:700;position:sticky;z-index:5;}
 table.co tbody tr:nth-child(even){background:#f8fafc;}
 table.co tbody tr:hover{filter:brightness(0.97);}
+table.co tbody tr.row-highlighted td:nth-child(1),
+table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outline-offset:-3px;}
 .col-c0{background:#2563eb;} .col-c1{background:#7c3aed;} .col-c2{background:#db2777;}
 .col-c3{background:#ea580c;} .col-c4{background:#0891b2;} .col-c5{background:#d97706;}
 .col-c6{background:#dc2626;} .col-c7{background:#4f46e5;} .col-c8{background:#c026d3;}
@@ -192,6 +194,7 @@ input.inline-text{border:1px dashed var(--line);border-radius:6px;padding:4px 6p
   table.co th,table.co td{padding:4px 6px;font-size:11.5px;}
   .tabbar.lvl1{top:58px;}
 }
+.name-compact{display:none;}
 /* Sur tablette, les colonnes gardent leur largeur naturelle (adaptée au contenu) mais tout est
    resserré au maximum pour limiter le défilement horizontal ; le défilement reste possible en secours. */
 @media (max-width:1400px){
@@ -204,6 +207,9 @@ input.inline-text{border:1px dashed var(--line);border-radius:6px;padding:4px 6p
   input.inline-text{font-size:12px;padding:3px 5px;}
   .comport-btn{padding:3px 6px;font-size:11px;}
   .btn-xs{padding:1px 5px;font-size:11px;}
+  .name-full{display:none;}
+  .name-compact{display:inline;}
+  .papillon-timeline{flex-wrap:nowrap;gap:5px;overflow-x:auto;}
 }
 @media (max-width:1400px) and (orientation:portrait){
   table.co th,table.co td{padding:2px 4px;font-size:11px;}
@@ -291,7 +297,7 @@ function saveState(skipSync){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ alert("Attention : sauvegarde locale impossible (stockage plein). Exportez une sauvegarde JSON."); }
   if(!skipSync) scheduleGithubPush();
 }
-function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{}, baremeTab:"s1" }; }
+function defaultUI(){ return { top:"general", classTab:{}, seanceTab:{}, baremeTab:"s1", highlightRowKey:"" }; }
 function loadUI(){
   try{ const raw = localStorage.getItem(UI_KEY); if(raw) return Object.assign(defaultUI(), JSON.parse(raw)); }catch(e){}
   return defaultUI();
@@ -859,6 +865,9 @@ function renderApp(){
   requestAnimationFrame(()=>window.scrollTo(0,scrollY));
 }
 function applyStickyCols(){
+  const headerEl = document.querySelector("header.top");
+  const tabbarEl = document.querySelector(".tabbar.lvl1");
+  const stickyTop = (headerEl ? headerEl.getBoundingClientRect().height : 0) + (tabbarEl ? tabbarEl.getBoundingClientRect().height : 0);
   document.querySelectorAll(".table-wrap table").forEach(table=>{
     const headRow = table.tHead && table.tHead.rows[0];
     if(!headRow || headRow.cells.length<2) return;
@@ -870,6 +879,7 @@ function applyStickyCols(){
       c0.style.position = "sticky"; c0.style.left = "0px"; c0.style.zIndex = inHead?"7":"4";
       c1.style.position = "sticky"; c1.style.left = w1+"px"; c1.style.zIndex = inHead?"7":"4";
       c1.style.boxShadow = "2px 0 4px -2px rgba(0,0,0,.35)";
+      if(inHead){ row.querySelectorAll("th").forEach(th=>{ th.style.top = stickyTop+"px"; }); }
     });
   });
 }
@@ -1156,6 +1166,11 @@ function noteBadge(path, display, isManual, width, titleText){
   const w = width || 50;
   return `<span class="cell-btn ${gradeColorClass(display)}" style="display:inline-block;width:${w}px;text-align:center;font-weight:800;cursor:pointer;${underline}" data-action="cycle-grade-note" data-path="${escAttr(path)}" title="${escAttr(titleText||"Cliquez pour changer la note : TB → S → F → I")}">${escHtml(display||"—")}</span>`;
 }
+function noteBadgeReadonly(display, isManual, width){
+  const underline = isManual ? "text-decoration:underline;text-underline-offset:2px;" : "";
+  const w = width || 50;
+  return `<span class="cell-btn ${gradeColorClass(display)}" style="display:inline-block;width:${w}px;text-align:center;font-weight:800;cursor:default;${underline}" title="Modifiable uniquement depuis l'onglet de la situation">${escHtml(display||"—")}</span>`;
+}
 function manualGradeBtns(cls, num, sid, field, current){
   return COMPORT_OPTIONS.map(opt=>`<button type="button" class="comport-btn ${current===opt?"active "+gradeColorClass(opt):""}" data-action="set-manual-grade" data-class="${escAttr(cls)}" data-seance="${num}" data-student="${sid}" data-field="${field}" data-value="${opt}">${opt}</button>`).join("");
 }
@@ -1292,13 +1307,13 @@ function renderRecap(cls, num){
         const parcoursList = [["p1",prow.p1],["p2",prow.p2]].concat(prow.p3 ? [["p3",prow.p3]] : []);
         const inputs = parcoursList.map(([field,p])=>{
           const val = papillonParcoursEffectiveNote(num, prow, p);
-          return noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+field+".note", val, p.note!==""&&p.note!=null, 42, "Note parcours "+field.slice(1)+" : cliquez pour changer (TB → S → F → I)");
+          return noteBadgeReadonly(val, p.note!==""&&p.note!=null, 42);
         }).join("");
         return `<td>${inputs}</td>`;
       }
       const row = se[situ].rows[g.id];
       const isManual = row && row.note!=="" && row.note!=null;
-      return `<td>${noteBadge("classes."+cls+".seances.s"+num+"."+situ+".rows."+g.id+".note", display, isManual, 55)}</td>`;
+      return `<td>${noteBadgeReadonly(display, isManual, 55)}</td>`;
     }).join("");
     const sa1Cell = num===1 ? `<td><div class="comport-toggles">${manualGradeBtns(cls,num,s.id,"sa1TraceStop", d.sa1)}</div></td>` : "";
     const comportBtns = manualGradeBtns(cls,num,s.id,"comportement", d.comportement);
@@ -1308,7 +1323,7 @@ function renderRecap(cls, num){
       : d.presenceStatus==="dispense"
         ? `<span class="presence-chip presence-disp" style="cursor:default;">⊘ DISP</span>`
         : "";
-    return `<tr style="background:${c2.bg};color:${c2.text};">
+    return `<tr ${rowAttrs(cls+"_s"+num+"_recap_"+s.id)} style="background:${c2.bg};color:${c2.text};">
       <td class="left" style="font-weight:800;background:${c2.bg};color:${c2.text};">${escHtml(s.nom)}</td>
       <td class="left" style="background:${c2.bg};color:${c2.text};">${escHtml(s.prenom)}</td>
       <td>${presenceBadge}</td>
@@ -1372,14 +1387,23 @@ function renderGroupesPool(cls, num, situ){
   `;
 }
 
-function groupeCellHtml(cls, num, situ, g, gi){
+function compactStudentName(s){
+  if(!s) return "?";
+  const nom = (s.nom||"").trim().toUpperCase();
+  const initial = nom ? nom[0]+"." : "";
+  return [initial, s.prenom].filter(Boolean).join(" ") || "?";
+}
+function groupeCellHtml(cls, num, situ, g, gi, compact){
   const pending = pendingSelection[pendingKey(cls,num,situ)];
   const clickAttr = pending ? `data-action="add-pending-to-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}"` : "";
   return `<div ${clickAttr} style="${pending?"cursor:pointer;":""}display:flex;align-items:center;gap:4px;">
     ${pending?`<div style="font-weight:800;">➕ ajouter ici</div>`:""}
     <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;">${sortMemberIdsByRoster(cls, g.memberIds).map(sid=>{
       const s = studentById(cls,sid);
-      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;font-size:15px;font-weight:700;padding:3px 9px;">${escHtml(studentShortName(s))}
+      const nameHtml = compact
+        ? `<span class="name-full">${escHtml(studentShortName(s))}</span><span class="name-compact">${escHtml(compactStudentName(s))}</span>`
+        : escHtml(studentShortName(s));
+      return `<span class="chip" style="background:#ffffffb0;color:inherit;white-space:nowrap;font-size:15px;font-weight:700;padding:3px 9px;">${nameHtml}
         <button data-action="remove-from-groupe" data-class="${escAttr(cls)}" data-seance="${num}" data-situ="${situ}" data-groupe="${g.id}" data-student="${sid}">✕</button>
       </span>`;
     }).join("")}</div>
@@ -1398,6 +1422,10 @@ const ROW_COLORS = [
   {bg:"#fbeafd", text:"#8c2a96"},
   {bg:"#eef1f4", text:"#3c4654"}
 ];
+function rowAttrs(key){
+  const hl = uiState.highlightRowKey===key ? " row-highlighted" : "";
+  return `data-row-key="${escAttr(key)}" class="${hl.trim()}"`;
+}
 function rowColorStyle(gi){
   const c = ROW_COLORS[gi % ROW_COLORS.length];
   return `background:${c.bg};color:${c.text};`;
@@ -1515,7 +1543,7 @@ function renderSuivi(cls, num){
       const inner = b.status==="ok" ? "✔" : (b.status==="partial" ? "⚠" : (b.status==="ko" ? "✘" : "—"));
       return `<td><span class="cell-btn ${cls2}" data-action="toggle-suivi-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}</span></td>`;
     }).join("");
-    return `<tr style="${rowColorStyle(gi)}">
+    return `<tr ${rowAttrs(cls+"_s"+num+"_"+situ+"_"+g.id)} style="${rowColorStyle(gi)}">
       <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
       <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td><span class="cell-btn sens-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer le sens">${sensHtml}</span></td>
@@ -1569,7 +1597,7 @@ function renderEtoile(cls, num){
       }
       return `<td><span class="cell-btn ${cls2}" data-action="toggle-balise" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}">${inner}${timeTag}</span><button class="btn-xs" style="display:block;margin:2px auto 0;" data-action="edit-balise-code" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-index="${bi}" title="Modifier le numéro de cette balise">✏️</button></td>`;
     }).join("");
-    return `<tr style="${rowColorStyle(gi)}">
+    return `<tr ${rowAttrs(cls+"_s"+num+"_"+situ+"_"+g.id)} style="${rowColorStyle(gi)}">
       <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
       <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td class="left"><input class="inline-text" type="text" placeholder="codes prévus (ex: 59,53,47)" value="${escAttr(r.prevu||"")}" data-path="classes.${escAttr(cls)}.seances.s${num}.etoile.rows.${g.id}.prevu"></td>
@@ -1668,14 +1696,14 @@ function renderPapillon(cls, num){
       const noteInput = noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+pField+".note", noteVal, p.note!==""&&p.note!=null, 50, "Note de ce parcours : cliquez pour changer (TB → S → F → I)");
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
-      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}${noteInput}${pointsTag}${removeBtn}</div>${historyHtml}`;
+      return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div class="papillon-timeline" style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}${noteInput}${pointsTag}${removeBtn}</div>${historyHtml}`;
     }
     const p3Cell = r.p3
       ? parcoursCell(r.p3, 3, "p3")
       : `<button class="btn-xs btn-teal" data-action="add-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}">➕ Parcours optionnel</button>`;
-    return `<tr style="${rowColorStyle(gi)}">
+    return `<tr ${rowAttrs(cls+"_s"+num+"_"+situ+"_"+g.id)} style="${rowColorStyle(gi)}">
       <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
-      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
+      <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi,true)}</td>
       <td class="left">${parcoursCell(r.p1,1,"p1")}</td>
       <td class="left">${parcoursCell(r.p2,2,"p2")}</td>
       <td class="left">${p3Cell}</td>
@@ -1747,7 +1775,7 @@ function renderScores(cls, num){
     const {total, suggestedNote} = scoresPointsAndNote(r);
     const tempsTotal = (r.depart && r.fin) ? fmtElapsed(r.fin-r.depart) : "";
     const countInput = (color)=>`<input class="note-input scores-count-input" type="number" min="0" step="1" value="${escAttr(r[color]!=null?r[color]:0)}" data-path="classes.${escAttr(cls)}.seances.s${num}.scores.rows.${g.id}.${color}">`;
-    return `<tr style="${rowColorStyle(gi)}">
+    return `<tr ${rowAttrs(cls+"_s"+num+"_"+situ+"_"+g.id)} style="${rowColorStyle(gi)}">
       <td style="${rowColorStyle(gi)}"><b>${gi+1}</b></td>
       <td class="left" style="${rowColorStyle(gi)}">${groupeCellHtml(cls,num,situ,g,gi)}</td>
       <td><span class="cell-btn" style="font-weight:800;" data-action="toggle-scores-zone" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer de parcours">${zoneLabel}</span></td>
@@ -1792,6 +1820,14 @@ function renderCartesPanel(){
 
 /* ===================== ACTIONS ===================== */
 const app = document.getElementById("app");
+
+document.addEventListener("click", function(e){
+  const row = e.target.closest("table.co tbody tr[data-row-key]");
+  if(!row || uiState.highlightRowKey === row.dataset.rowKey) return;
+  uiState.highlightRowKey = row.dataset.rowKey;
+  saveUI();
+  if(!e.target.closest("[data-action]")) renderApp();
+});
 
 document.addEventListener("click", function(e){
   const t = e.target.closest("[data-action]");
