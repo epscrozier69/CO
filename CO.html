@@ -112,6 +112,14 @@ table.co tbody tr:nth-child(even){background:#f8fafc;}
 table.co tbody tr:hover{filter:brightness(0.97);}
 table.co tbody tr.row-highlighted td:nth-child(1),
 table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outline-offset:-3px;}
+table.co:not(.recap-table) tbody td:nth-child(2){transition:background .12s;}
+table.co:not(.recap-table) tbody tr:hover td:nth-child(2){
+  background:linear-gradient(135deg,var(--accent2) 0%,#00a890 100%) !important;
+  box-shadow:inset 0 0 0 1px #ffffff80;
+}
+table.co:not(.recap-table) tbody tr:hover td:nth-child(2) .chip{
+  background:#ffffffe6 !important;color:#07332c !important;font-weight:800;
+}
 .col-c0{background:#2563eb;} .col-c1{background:#7c3aed;} .col-c2{background:#db2777;}
 .col-c3{background:#ea580c;} .col-c4{background:#0891b2;} .col-c5{background:#d97706;}
 .col-c6{background:#dc2626;} .col-c7{background:#4f46e5;} .col-c8{background:#c026d3;}
@@ -131,10 +139,12 @@ table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outl
 .recap-table thead th{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 70%,#1b3550 100%);color:#fff;font-weight:700;border:none;padding:11px 14px;}
 .recap-table tbody td{border-color:#ffffff90;}
 .recap-table tbody tr:hover{filter:brightness(0.97);}
+.recap-table tbody td:nth-child(1),
+.recap-table tbody td:nth-child(2){transition:background .12s,color .12s,font-size .12s;}
 .recap-table tbody tr:hover td:nth-child(1),
 .recap-table tbody tr:hover td:nth-child(2){
-  background:var(--navy2) !important;color:#fff !important;
-  font-size:14.5px;font-weight:900;filter:none;
+  background:linear-gradient(135deg,var(--accent2) 0%,#00a890 100%) !important;color:#07332c !important;
+  font-size:14.5px;font-weight:900;filter:none;box-shadow:inset 0 0 0 1px #ffffff80;
 }
 .comport-toggles{display:flex;gap:4px;justify-content:center;}
 .comport-btn{padding:5px 9px;border-radius:7px;border:2px solid #0002;background:#ffffffb0;font-size:11px;font-weight:800;cursor:pointer;color:inherit;opacity:.65;}
@@ -145,6 +155,12 @@ table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outl
 .grade-i{background:#d3332c!important;border-color:#a82822!important;color:#fff!important;}
 .grade-slash{background:#eceff2!important;border-color:#9aa6b3!important;color:#6b7684!important;}
 select.cell-btn{-webkit-appearance:none;appearance:none;}
+.note-select{background:#fff!important;border-width:2px!important;}
+.note-select.grade-tb{color:#1f9d2e!important;border-color:#2bcf0a!important;}
+.note-select.grade-s{color:#1a7d46!important;border-color:#1a7d46!important;}
+.note-select.grade-f{color:#bb7400!important;border-color:#bb7400!important;}
+.note-select.grade-i{color:#a82822!important;border-color:#a82822!important;}
+.note-select.grade-slash{color:#6b7684!important;border-color:#9aa6b3!important;}
 .time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
 .time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
 .time-tag.depart{color:#0b7a68;} .time-tag.fin{color:#6a3fd6;}
@@ -1181,7 +1197,7 @@ function noteBadge(path, suggestedNote, manualValue, width, titleText){
   const proposedLabel = (suggestedNote!=null && suggestedNote!=="") ? suggestedNote : "—";
   const options = `<option value="" ${!manual?"selected":""}>${escHtml(proposedLabel)}</option>`
     + GRADE_SELECT_OPTIONS.map(opt=>`<option value="${escAttr(opt)}" ${manual&&manualValue===opt?"selected":""}>${escHtml(opt)}</option>`).join("");
-  return `<select class="cell-btn ${gradeColorClass(effective)}" style="display:inline-block;width:${w}px;text-align:center;text-align-last:center;font-weight:800;cursor:pointer;${underline}" data-path="${escAttr(path)}" title="${escAttr(titleText||"Choisir une note, ou garder la note proposée")}">${options}</select>`;
+  return `<select class="cell-btn note-select ${gradeColorClass(effective)}" style="display:inline-block;width:${w}px;text-align:center;text-align-last:center;font-weight:800;cursor:pointer;${underline}" data-path="${escAttr(path)}" title="${escAttr(titleText||"Choisir une note, ou garder la note proposée")}">${options}</select>`;
 }
 function noteBadgeReadonly(display, isManual, width){
   const underline = isManual ? "text-decoration:underline;text-underline-offset:2px;" : "";
