@@ -127,10 +127,15 @@ table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outl
 .cell-btn.partial{background:#fdf0e0;border-color:#e08c00;color:#8a5600;}
 .cell-btn.pending{background:#fff;border:3px solid #2563eb;color:#1a4fc4;box-shadow:0 0 0 2px #2563eb33;}
 .sens-btn{font-size:26px;font-weight:900;min-width:44px;padding:6px 10px;}
-.recap-table{border-radius:10px;overflow:hidden;}
+.recap-table{border-radius:10px;overflow:clip;}
 .recap-table thead th{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 70%,#1b3550 100%);color:#fff;font-weight:700;border:none;padding:11px 14px;}
 .recap-table tbody td{border-color:#ffffff90;}
 .recap-table tbody tr:hover{filter:brightness(0.97);}
+.recap-table tbody tr:hover td:nth-child(1),
+.recap-table tbody tr:hover td:nth-child(2){
+  background:var(--navy2) !important;color:#fff !important;
+  font-size:14.5px;font-weight:900;filter:none;
+}
 .comport-toggles{display:flex;gap:4px;justify-content:center;}
 .comport-btn{padding:5px 9px;border-radius:7px;border:2px solid #0002;background:#ffffffb0;font-size:11px;font-weight:800;cursor:pointer;color:inherit;opacity:.65;}
 .comport-btn.active{opacity:1;}
@@ -138,6 +143,8 @@ table.co tbody tr.row-highlighted td:nth-child(2){outline:3px solid #fbbf24;outl
 .grade-s{background:#1f9d55!important;border-color:#1a7d46!important;color:#fff!important;}
 .grade-f{background:#e08c00!important;border-color:#bb7400!important;color:#fff!important;}
 .grade-i{background:#d3332c!important;border-color:#a82822!important;color:#fff!important;}
+.grade-slash{background:#eceff2!important;border-color:#9aa6b3!important;color:#6b7684!important;}
+select.cell-btn{-webkit-appearance:none;appearance:none;}
 .time-tag{font-size:10.5px;display:block;margin-top:2px;font-weight:700;}
 .time-tag.green{color:var(--ok);} .time-tag.orange{color:var(--warn);} .time-tag.red{color:var(--ko);}
 .time-tag.depart{color:#0b7a68;} .time-tag.fin{color:#6a3fd6;}
@@ -1162,13 +1169,19 @@ function gradeColorClass(val){
   if(v==="S") return "grade-s";
   if(v==="F") return "grade-f";
   if(v==="I") return "grade-i";
+  if(v==="/") return "grade-slash";
   return "";
 }
-const GRADE_CYCLE = ["TB","S","F","I"];
-function noteBadge(path, display, isManual, width, titleText){
-  const underline = isManual ? "text-decoration:underline;text-underline-offset:2px;" : "";
+const GRADE_SELECT_OPTIONS = ["TB","S","F","I","/"];
+function noteBadge(path, suggestedNote, manualValue, width, titleText){
+  const manual = manualValue!=null && manualValue!=="";
+  const effective = manual ? manualValue : suggestedNote;
+  const underline = manual ? "text-decoration:underline;text-underline-offset:2px;" : "";
   const w = width || 50;
-  return `<span class="cell-btn ${gradeColorClass(display)}" style="display:inline-block;width:${w}px;text-align:center;font-weight:800;cursor:pointer;${underline}" data-action="cycle-grade-note" data-path="${escAttr(path)}" title="${escAttr(titleText||"Cliquez pour changer la note : TB → S → F → I")}">${escHtml(display||"—")}</span>`;
+  const proposedLabel = (suggestedNote!=null && suggestedNote!=="") ? ("Proposée : "+suggestedNote) : "Proposée";
+  const options = `<option value="" ${!manual?"selected":""}>${escHtml(proposedLabel)}</option>`
+    + GRADE_SELECT_OPTIONS.map(opt=>`<option value="${escAttr(opt)}" ${manual&&manualValue===opt?"selected":""}>${escHtml(opt)}</option>`).join("");
+  return `<select class="cell-btn ${gradeColorClass(effective)}" style="display:inline-block;width:${w}px;text-align:center;text-align-last:center;font-weight:800;cursor:pointer;${underline}" data-path="${escAttr(path)}" title="${escAttr(titleText||"Choisir une note, ou garder la note proposée")}">${options}</select>`;
 }
 function noteBadgeReadonly(display, isManual, width){
   const underline = isManual ? "text-decoration:underline;text-underline-offset:2px;" : "";
@@ -1553,7 +1566,7 @@ function renderSuivi(cls, num){
       <td><span class="cell-btn sens-btn" data-action="toggle-sens" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" title="Cliquer pour changer le sens">${sensHtml}</span></td>
       ${balisesHtml}
       <td><b>${justes}/${nb}</b></td>
-      <td>${noteBadge("classes."+cls+".seances.s"+num+".suivi.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 50)}</td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".suivi.rows."+g.id+".note", suggestedNote, r.note, 50)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Cliquez sur « Sens » pour indiquer → ou ←. Cliquez sur une balise : — → ✔ (bonne balise + bon placement) → ⚠ (trouvée, mauvais placement) → ✘ (pas trouvée) → —.
@@ -1609,7 +1622,7 @@ function renderEtoile(cls, num){
       ${balisesHtml}
       <td><b>${nbTrouvees}/${nb}</b></td>
       <td><b class="time-tag ${totalColor}">${totalMs!=null?fmtElapsed(totalMs):""}</b></td>
-      <td>${noteBadge("classes."+cls+".seances.s"+num+".etoile.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 50)}</td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".etoile.rows."+g.id+".note", suggestedNote, r.note, 50)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Chaque case affiche le numéro de la balise prévue pour ce binôme (d'après « Parcours prévu »). Cliquez dessus pour la faire passer : — → ◯ (balise en cours, pour pointer celle visée même hors ordre) → ✔ (validée, temps affiché) → ✘ (non validée) → —.
@@ -1695,9 +1708,9 @@ function renderPapillon(cls, num){
       const resetChronoBtn = p.depart ? `<button class="btn-xs" data-action="papillon-parcours-reset-chrono" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-parcours="${pnum}" title="Relancer le chrono pour ce parcours (garde l'ancien chrono en historique)">🔄</button>` : "";
       const historyHtml = (p.history && p.history.length) ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">⏱️ Essai(s) précédent(s) : ${p.history.map(h=>fmtClock(h.depart)+"→"+fmtClock(h.fin)+" ("+fmtElapsed(h.fin-h.depart)+")").join(" · ")}</div>` : "";
       const numLabel = `<select style="font-weight:800;font-size:15px;margin-bottom:4px;" data-action-select="set-papillon-parcours-num" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" data-pfield="${pField}" title="Changer le numéro de ce parcours"><option value="">N° ?</option>${Array.from({length:parcoursCount},(_,i)=>i+1).map(k=>`<option value="${k}" ${p.parcoursNum===k?"selected":""}>N° ${k}</option>`).join("")}</select>`;
-      const noteVal = papillonParcoursEffectiveNote(num, r, p);
+      const pSuggested = papillonParcoursSuggested(num, r, p);
       const pPoints = papillonParcoursPoints(num, p);
-      const noteInput = noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+pField+".note", noteVal, p.note!==""&&p.note!=null, 50, "Note de ce parcours : cliquez pour changer (TB → S → F → I)");
+      const noteInput = noteBadge("classes."+cls+".seances.s"+num+".papillon.rows."+g.id+"."+pField+".note", pSuggested, p.note, 50, "Note de ce parcours : choisir une note, ou garder la note proposée");
       const pointsTag = `<b style="font-size:14px;">${pPoints} pts</b>`;
       const removeBtn = pField==="p3" ? `<button class="btn-xs btn-danger" data-action="remove-papillon-p3" data-class="${escAttr(cls)}" data-seance="${num}" data-groupe="${g.id}" style="margin-left:6px;">✕</button>` : "";
       return `${numLabel}<div style="font-size:13.5px;">${chips}</div><div class="papillon-timeline" style="margin-top:3px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${departHtml}${finHtml}${timeHtml}${resetChronoBtn}${noteInput}${pointsTag}${removeBtn}</div>${historyHtml}`;
@@ -1797,7 +1810,7 @@ function renderScores(cls, num){
       <td>${countInput("vert")}</td>
       <td><b>${total} pts</b></td>
       <td><b class="time-tag ${tempsTotalColor}">${tempsTotal}</b></td>
-      <td>${noteBadge("classes."+cls+".seances.s"+num+".scores.rows."+g.id+".note", r.note!==""&&r.note!=null?r.note:suggestedNote, r.note!==""&&r.note!=null, 55)}</td>
+      <td>${noteBadge("classes."+cls+".seances.s"+num+".scores.rows."+g.id+".note", suggestedNote, r.note, 55)}</td>
     </tr>`;
   }).join("");
   return top + `<p class="hint">Cliquez Départ puis Fin pour chronométrer (Entrée fait passer à la case suivante). Saisissez le nombre de balises trouvées par couleur (Bleu = 15 pts, Rouge = 10 pts, Rose = 5 pts, Vert = 3 pts) ; le score total et la note suggérée (barème points + temps) se calculent automatiquement, modifiable manuellement.</p>
@@ -2096,15 +2109,6 @@ document.addEventListener("click", function(e){
     const se = ensureSeance(cls,num);
     if(!se[field]) se[field] = {};
     se[field][sid] = (se[field][sid]===val) ? "" : val;
-    saveState(); renderApp();
-    return;
-  }
-  if(action==="cycle-grade-note"){
-    const path = t.dataset.path;
-    const current = (getPath(state, path)||"").toString().trim().toUpperCase();
-    const idx = GRADE_CYCLE.indexOf(current);
-    const next = GRADE_CYCLE[(idx+1)%GRADE_CYCLE.length];
-    setPath(state, path, next);
     saveState(); renderApp();
     return;
   }
